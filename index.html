@@ -131,11 +131,16 @@
     { id: 'terminal', name: 'Terminal', tag: '// 05', size: 14, color: 0xa07898, orbit: 250, speed: 0.0015 },
   ];
 
-  // El Sol (Núcleo) - Material básico para que no tenga sombras propias y parezca una interfaz pura
-  const sunGeometry = new THREE.SphereGeometry(20, 32, 32);
-  const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  const sun = new THREE.Mesh(sunGeometry, sunMaterial);
-  scene.add(sun);
+    // El Sol (Núcleo) - Material físico con emisión cálida
+    const sunGeometry = new THREE.SphereGeometry(20, 32, 32);
+    const sunMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0xfaf7f1, 
+        emissive: 0xc17f4a, // Tono terracota brillando desde dentro
+        emissiveIntensity: 0.3,
+        roughness: 0.8
+    });
+    const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+    scene.add(sun);
 
   // Anillos orbitales
   planetData.forEach(data => {
@@ -167,33 +172,94 @@
     planets.push(planet);
   });
 
-  // 4. INTERACCIÓN Y RAYCASTER
+ // 4. INTERACCIÓN, FÍSICAS Y CÁMARA
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
   let hoveredPlanet = null;
   const labelEl = document.getElementById('label');
 
+  // Variables de estado para físicas y paneo
+  let isDragging = false;
+  let isPanning = false;
+  let draggedPlanet = null;
+  let previousMouse = { x: 0, y: 0 };
+  
+  // Desplazamos la cámara de inicio para que el Sol quede a la izquierda (descentrado)
+  const panOffset = new THREE.Vector3(60, 0, 0); 
+  const targetPan = new THREE.Vector3(60, 0, 0); 
+
+  window.addEventListener('mousedown', (e) => {
+    if (hoveredPlanet) {
+      isDragging = true;
+      draggedPlanet = hoveredPlanet;
+      // Detenemos su inercia al agarrarlo
+      draggedPlanet.userData.vx = 0;
+      draggedPlanet.userData.vy = 0;
+      draggedPlanet.userData.vz = 0;
+    } else {
+      isPanning = true;
+    }
+    previousMouse = { x: e.clientX, y: e.clientY };
+  });
+
   window.addEventListener('mousemove', (e) => {
-    // Normalizar coordenadas del ratón de -1 a 1 para Three.js
+    // Normalizar para el Raycaster
     mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-    
-    // Paralaje ligero de la cámara basado en el ratón
-    camera.position.x += (mouse.x * 20 - camera.position.x) * 0.05;
-    camera.position.y += (mouse.y * 20 - camera.position.y) * 0.05;
 
-    // Lógica del hover de UI
-    if (hoveredPlanet) {
-      labelEl.classList.add('show');
-      labelEl.style.left = e.clientX + 'px';
-      labelEl.style.top = e.clientY + 'px';
-      document.getElementById('label-name').textContent = hoveredPlanet.userData.name;
-      document.getElementById('label-tag').textContent = hoveredPlanet.userData.tag;
-      document.body.style.cursor = 'pointer';
-    } else {
-      labelEl.classList.remove('show');
-      document.body.style.cursor = 'default';
+    const deltaX = e.clientX - previousMouse.x;
+    const deltaY = e.clientY - previousMouse.y;
+
+    if (isDragging && draggedPlanet) {
+      // Arrastrar el planeta (falsificamos la profundidad Z en base al zoom actual)
+      const factor = targetCamZ / 800;
+      draggedPlanet.position.x += deltaX * factor;
+      draggedPlanet.position.y -= deltaY * factor;
+      
+      // Guardar velocidad para cuando lo soltemos (lanzamiento)
+      draggedPlanet.userData.vx = deltaX * factor * 0.5;
+      draggedPlanet.userData.vy = -deltaY * factor * 0.5;
+    } 
+    else if (isPanning) {
+      // Mover el plano de la cámara
+      const factor = targetCamZ / 800;
+      targetPan.x -= deltaX * factor;
+      targetPan.y += deltaY * factor;
+    } 
+    else {
+      // Detectar hover normal
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(planets);
+      if (intersects.length > 0) {
+        hoveredPlanet = intersects[0].object;
+        document.body.style.cursor = 'grab';
+        labelEl.classList.add('show');
+        labelEl.style.left = e.clientX + 'px';
+        labelEl.style.top = e.clientY + 'px';
+        document.getElementById('label-name').textContent = hoveredPlanet.userData.name;
+        document.getElementById('label-tag').textContent = hoveredPlanet.userData.tag;
+      } else {
+        hoveredPlanet = null;
+        document.body.style.cursor = 'default';
+        labelEl.classList.remove('show');
+      }
     }
+    previousMouse = { x: e.clientX, y: e.clientY };
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (isDragging && draggedPlanet) {
+      document.body.style.cursor = 'grab';
+      // Si casi no lo movimos, se considera un CLICK para abrir el modal
+      if (Math.abs(draggedPlanet.userData.vx) < 0.5 && Math.abs(draggedPlanet.userData.vy) < 0.5) {
+        document.getElementById('pv-title').textContent = draggedPlanet.userData.name;
+        document.getElementById('backdrop').classList.add('show');
+        document.getElementById('preview').classList.add('show');
+      }
+    }
+    isDragging = false;
+    draggedPlanet = null;
+    isPanning = false;
   });
 
   // 5. NAVEGACIÓN 3D (Scroll de profundidad)
@@ -226,25 +292,55 @@
   });
 
   // 7. BUCLE DE ANIMACIÓN
-  function animate() {
-    requestAnimationFrame(animate);
+    function animate() {
+        requestAnimationFrame(animate);
 
-    // Suavizado del movimiento de la cámara (Interpolación Lineal)
-    camera.position.z += (targetCamZ - camera.position.z) * 0.08;
-    camera.lookAt(0, 0, 0); // Mirar siempre al centro
+        // Movimiento suave de la cámara (Interpolación para Zoom y Paneo)
+        camera.position.z += (targetCamZ - camera.position.z) * 0.08;
+        panOffset.lerp(targetPan, 0.1);
+        camera.position.x = panOffset.x;
+        camera.position.y = panOffset.y;
+        camera.lookAt(panOffset.x, panOffset.y, 0);
 
-    // Órbitas de los planetas
-    planets.forEach(planet => {
-      const data = planet.userData;
-      data.angle += data.speed;
-      // Rotar los planetas en el plano XZ
-      planet.position.x = Math.cos(data.angle) * data.orbit;
-      planet.position.z = Math.sin(data.angle) * data.orbit;
-      
-      // Hacer que el propio planeta gire sobre su eje
-      planet.rotation.y += 0.01;
-      planet.rotation.x += 0.005;
-    });
+        // Físicas de los planetas
+        planets.forEach(planet => {
+        const data = planet.userData;
+        
+        if (draggedPlanet !== planet) {
+            // Calcular la posición natural en la órbita
+            data.angle += data.speed;
+            const targetX = Math.cos(data.angle) * data.orbit;
+            const targetZ = Math.sin(data.angle) * data.orbit;
+            const targetY = 0; // Se mantienen en el plano ecuatorial
+            
+            // Físicas de resorte: Atracción hacia su órbita
+            const fx = (targetX - planet.position.x) * 0.015;
+            const fy = (targetY - planet.position.y) * 0.015;
+            const fz = (targetZ - planet.position.z) * 0.015;
+
+            // Aplicar fuerza a la velocidad
+            data.vx = (data.vx || 0) + fx;
+            data.vy = (data.vy || 0) + fy;
+            data.vz = (data.vz || 0) + fz;
+
+            // Fricción en el vacío
+            data.vx *= 0.94;
+            data.vy *= 0.94;
+            data.vz *= 0.94;
+
+            // Actualizar posición real
+            planet.position.x += data.vx;
+            planet.position.y += data.vy;
+            planet.position.z += data.vz;
+        }
+
+        // Rotación visual sobre sí mismos
+        planet.rotation.y += 0.01;
+        planet.rotation.x += 0.005;
+        });
+
+        renderer.render(scene, camera);
+    }
 
     // Detectar intersecciones del ratón con los planetas
     raycaster.setFromCamera(mouse, camera);
