@@ -3,326 +3,957 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>ajota.system 3D</title>
+<title>ajota.system</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=DM+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-
 <style>
-  :root {
-    --bg:          #f5f0e8;
-    --bg-card:     rgba(250,247,241,0.92);
-    --ink:         #1a1612;
-    --ink-dim:     #6b6157;
-    --ink-faint:   #c8bfb0;
-    --accent:      #c17f4a; 
-    --magenta:     #c94f8a; 
-    --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
-    --font-mono: "DM Mono", ui-monospace, monospace;
-  }
+:root {
+  --bg: #f5f0e8;
+  --bg-card: rgba(250,247,241,0.94);
+  --ink: #1a1612;
+  --ink-dim: #6b6157;
+  --ink-faint: #c8bfb0;
+  --accent: #c17f4a;
+  --accent-soft: #d9a472;
+  --sage: #7a9e7e;
+  --dusty: #7b8fa8;
+  --mauve: #a07898;
+  --graphite: #4a5568;
+  --magenta: #c94f8a;
+  --font-sans: "Outfit", ui-sans-serif, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--ink); font-family: var(--font-sans); overflow: hidden; }
+body { -webkit-font-smoothing: antialiased; cursor: none; }
 
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: var(--font-sans); overflow: hidden; }
-  
-  #webgl-container { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; }
+#canvas-wrap { position: fixed; inset: 0; z-index: 0; }
 
-  /* ---------------- HUD ---------------- */
-  .hud { position: fixed; z-index: 10; color: var(--ink-dim); font-size: 11px; letter-spacing: .10em; text-transform: uppercase; font-weight: 500; user-select: none; pointer-events: none; }
-  .hud b { color: var(--ink); font-weight: 600; }
-  .hud .dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin-right: 8px; vertical-align: middle; animation: pulse 2.6s ease-in-out infinite; }
-  @keyframes pulse { 0%,100% { opacity: .4; } 50% { opacity: 1; } }
+/* cursor */
+#cursor {
+  position: fixed; top: 0; left: 0; width: 18px; height: 18px;
+  border: 1.5px solid var(--accent); border-radius: 50%;
+  pointer-events: none; z-index: 100;
+  transform: translate(-50%,-50%);
+  transition: width .15s, height .15s, border-color .15s, background .15s;
+  mix-blend-mode: multiply;
+}
+#cursor::after { content:''; position:absolute; inset:0; margin:auto; width:3px; height:3px; background:var(--accent); border-radius:50%; }
+#cursor.hover { width:36px; height:36px; border-color:var(--ink); }
+#cursor.hover::after { background:var(--ink); }
+#cursor.grab { width:30px; height:30px; border-color:var(--accent); border-width:2px; background:rgba(193,127,74,.08); }
 
-  #hud-tl { top: 22px; left: 28px; }
-  #hud-tl .name { display: flex; align-items: center; gap: 10px; }
-  #hud-tl .sub { margin-top: 6px; color: var(--ink-faint); font-size: 10px; }
+/* HUD */
+.hud { position:fixed; z-index:10; color:var(--ink-dim); font-size:11px; letter-spacing:.10em; text-transform:uppercase; font-weight:500; user-select:none; pointer-events:none; }
+.hud b { color:var(--ink); font-weight:600; }
+.dot { display:inline-block; width:5px; height:5px; border-radius:50%; background:var(--accent); margin-right:7px; vertical-align:middle; animation:pulse 2.8s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:.35} 50%{opacity:1} }
+#hud-tl { top:22px; left:28px; }
+#hud-tl .name { display:flex; align-items:center; gap:8px; font-size:12px; }
+#hud-tl .sub { margin-top:5px; color:var(--ink-faint); font-size:10px; font-family:var(--font-mono); }
+#hud-tr { top:22px; right:28px; text-align:right; font-family:var(--font-mono); font-size:10px; }
+#hud-tr .row { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-bottom:4px; }
+#hud-bl { bottom:22px; left:28px; line-height:1.8; font-size:10px; }
+#hud-bl kbd { font-family:var(--font-mono); font-size:9px; border:1px solid var(--ink-faint); padding:1px 5px; border-radius:3px; color:var(--ink); background:rgba(255,255,255,.4); }
+#hud-br { bottom:22px; right:28px; font-family:var(--font-mono); font-size:10px; text-align:right; }
 
-  #hud-tr { top: 22px; right: 28px; text-align: right; }
-  #hud-tr .row { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
-  #hud-tr .coord { font-family: var(--font-mono); font-size: 10px; color: var(--ink-dim); letter-spacing: .08em; text-transform: none; }
+/* label */
+#label { position:fixed; z-index:9; pointer-events:none; opacity:0; transform:translate(-50%,calc(-100% - 16px)); transition:opacity .15s; font-family:var(--font-mono); font-size:10px; color:var(--ink); letter-spacing:.10em; text-transform:uppercase; white-space:nowrap; }
+#label .tag { display:block; color:var(--accent); font-size:9px; margin-bottom:2px; }
+#label.show { opacity:1; }
 
-  #hud-bl { bottom: 22px; left: 28px; max-width: 320px; line-height: 1.7; }
-  #hud-bl kbd { display: inline-block; font-family: var(--font-mono); font-size: 10px; border: 1px solid var(--ink-faint); padding: 2px 6px; border-radius: 3px; color: var(--ink); margin: 0 2px; background: rgba(255,255,255,.02); }
+/* backdrop */
+#backdrop { position:fixed; inset:0; z-index:20; background:rgba(245,240,232,.55); backdrop-filter:blur(5px); opacity:0; pointer-events:none; transition:opacity .22s; }
+#backdrop.show { opacity:1; pointer-events:auto; }
 
-  #hud-br { bottom: 22px; right: 28px; text-align: right; font-family: var(--font-mono); font-size: 10px; text-transform: none; letter-spacing: .04em; color: var(--ink-faint); }
-  
-  #label { position: fixed; z-index: 9; pointer-events: none; opacity: 0; transform: translate(-50%, calc(-100% - 20px)); transition: opacity .15s ease; font-family: var(--font-mono); font-size: 11px; color: var(--ink); letter-spacing: .10em; text-transform: uppercase; white-space: nowrap; }
-  #label .tag { display: block; color: var(--accent); font-size: 9px; margin-bottom: 3px; opacity: .9; }
-  #label.show { opacity: 1; }
+/* preview card */
+#preview {
+  position:fixed; z-index:30; left:50%; top:50%;
+  transform:translate(-50%,-50%) scale(.95);
+  width:min(420px, calc(100vw - 48px));
+  background:var(--bg-card); backdrop-filter:blur(20px);
+  border:1px solid var(--ink-faint); border-radius:14px;
+  padding:28px 28px 22px; opacity:0; pointer-events:none;
+  transition:opacity .22s, transform .22s cubic-bezier(.2,.7,.2,1);
+  box-shadow:0 2px 0 rgba(255,255,255,.9) inset, 0 20px 60px rgba(26,22,18,.13);
+}
+#preview.show { opacity:1; transform:translate(-50%,-50%) scale(1); pointer-events:auto; }
+#preview .pv-top { display:flex; align-items:center; gap:10px; margin-bottom:16px; font-family:var(--font-mono); font-size:9px; color:var(--ink-dim); letter-spacing:.12em; text-transform:uppercase; }
+#preview .pv-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+#preview .pv-close { margin-left:auto; cursor:pointer; color:var(--ink-dim); border:1px solid var(--ink-faint); width:22px; height:22px; display:grid; place-items:center; border-radius:6px; font-size:14px; transition:all .15s; pointer-events:auto; }
+#preview .pv-close:hover { color:var(--ink); border-color:var(--ink-dim); }
+#preview h2 { font-size:28px; font-weight:600; letter-spacing:-.02em; color:var(--ink); margin-bottom:4px; }
+#preview .pv-role { font-family:var(--font-mono); font-size:10px; color:var(--accent); letter-spacing:.10em; text-transform:uppercase; margin-bottom:16px; }
+#preview p { font-size:14px; color:var(--ink-dim); line-height:1.65; margin-bottom:20px; }
+#preview p b { color:var(--ink); font-weight:500; }
+#preview .pv-meta { display:flex; gap:16px; padding:12px 0; border-top:1px solid var(--ink-faint); border-bottom:1px solid var(--ink-faint); margin-bottom:20px; }
+#preview .pv-meta .cell { flex:1; }
+#preview .pv-meta .k { font-family:var(--font-mono); font-size:9px; color:var(--ink-dim); letter-spacing:.14em; text-transform:uppercase; margin-bottom:3px; }
+#preview .pv-meta .v { font-size:13px; font-weight:500; color:var(--ink); }
+#preview .pv-actions { display:flex; gap:8px; }
+#preview .pv-actions a, #preview .pv-actions button {
+  flex:1; display:inline-flex; align-items:center; justify-content:center; gap:7px;
+  padding:10px 14px; font-family:var(--font-mono); font-size:10px;
+  letter-spacing:.10em; text-transform:uppercase; border-radius:8px;
+  cursor:pointer; text-decoration:none; transition:all .15s; border:none;
+}
+#preview .pv-actions a.primary { background:var(--ink); color:var(--bg); }
+#preview .pv-actions a.primary:hover { background:var(--accent); box-shadow:0 4px 16px rgba(193,127,74,.3); }
+#preview .pv-actions button.ghost { background:transparent; color:var(--ink); border:1px solid var(--ink-faint); }
+#preview .pv-actions button.ghost:hover { border-color:var(--ink-dim); }
 
-  #preview { position: fixed; z-index: 40; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(.96); opacity: 0; pointer-events: none; transition: all .25s ease; font-family: var(--font-sans); width: 400px; background: var(--bg-card); backdrop-filter: blur(20px); border: 1px solid var(--ink-faint); border-radius: 12px; padding: 28px; box-shadow: 0 20px 60px rgba(26,22,18,.12); }
-  #preview.show { opacity: 1; transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
-  #preview h2 { margin: 0 0 10px; font-size: 28px; color: var(--ink); }
-  #preview p { color: var(--ink-dim); font-size: 14px; line-height: 1.6; margin-bottom: 22px; }
-  #preview button { background: transparent; border: 1px solid var(--ink-faint); padding: 10px 15px; border-radius: 6px; cursor: pointer; text-transform: uppercase; letter-spacing: 2px; font-size: 10px; color: var(--ink); }
+/* terminal */
+#terminal {
+  position:fixed; z-index:35; left:50%; top:50%;
+  transform:translate(-50%,-50%) scale(.95);
+  width:min(680px, calc(100vw - 48px));
+  height:min(500px, calc(100vh - 48px));
+  background:#1a1612; border:1px solid rgba(193,127,74,.3); border-radius:14px;
+  display:flex; flex-direction:column; opacity:0; pointer-events:none;
+  transition:opacity .25s, transform .25s cubic-bezier(.2,.7,.2,1);
+  box-shadow:0 40px 100px rgba(26,22,18,.4);
+  font-family:var(--font-mono);
+}
+#terminal.show { opacity:1; transform:translate(-50%,-50%) scale(1); pointer-events:auto; }
+#terminal .tb { display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid rgba(193,127,74,.15); font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:rgba(245,240,232,.35); }
+#terminal .tb .tlight { width:7px; height:7px; border-radius:50%; background:var(--accent); }
+#terminal .tb .tpath { color:rgba(245,240,232,.75); }
+#terminal .tb .tclose { margin-left:auto; cursor:pointer; padding:3px 7px; border:1px solid rgba(245,240,232,.15); border-radius:4px; transition:all .15s; }
+#terminal .tb .tclose:hover { color:rgba(245,240,232,.9); border-color:var(--accent); }
+#term-out { flex:1; overflow-y:auto; padding:16px 20px 8px; font-size:12.5px; line-height:1.7; color:rgba(245,240,232,.88); scrollbar-width:thin; scrollbar-color:rgba(193,127,74,.25) transparent; }
+#term-out::-webkit-scrollbar { width:5px; }
+#term-out::-webkit-scrollbar-thumb { background:rgba(193,127,74,.25); border-radius:3px; }
+.tl { white-space:pre-wrap; word-break:break-word; }
+.tp { color:var(--accent); }
+.tu { color:rgba(245,240,232,.9); }
+.td { color:rgba(245,240,232,.35); }
+.tc { color:var(--accent-soft); }
+.tm { color:var(--magenta); }
+.tw { color:#e8c547; }
+.te { color:#e87a7a; }
+.tlink { color:var(--accent-soft); text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
+@keyframes blink { 50%{opacity:0} }
+#term-in-row { display:flex; align-items:center; gap:8px; padding:10px 20px 14px; border-top:1px solid rgba(193,127,74,.12); }
+#term-in-row .tpr { color:var(--accent); font-size:12.5px; }
+#term-in { flex:1; background:transparent; border:0; outline:0; color:rgba(245,240,232,.9); font-family:var(--font-mono); font-size:12.5px; caret-color:var(--accent); }
+#term-in:disabled { color:rgba(245,240,232,.3); }
 
-  #backdrop { position: fixed; inset: 0; z-index: 20; background: rgba(245,240,232,0.6); backdrop-filter: blur(4px); opacity: 0; pointer-events: none; transition: opacity .2s; }
-  #backdrop.show { opacity: 1; pointer-events: auto; }
+/* leblanc */
+#leblanc { position:fixed; inset:0; z-index:60; pointer-events:none; opacity:0; transition:opacity .3s; background:radial-gradient(circle at center, rgba(201,79,138,.10), rgba(245,240,232,0) 65%); }
+#leblanc.show { opacity:1; }
+#leblanc .glitch { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-family:var(--font-mono); font-size:11px; letter-spacing:.32em; text-transform:uppercase; color:var(--magenta); opacity:0; transition:opacity .2s; }
+#leblanc.show .glitch { opacity:1; }
+
+/* intro */
+#intro { position:fixed; inset:0; z-index:70; background:var(--bg); display:grid; place-items:center; transition:opacity .7s; font-family:var(--font-mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--ink-dim); }
+#intro.gone { opacity:0; pointer-events:none; }
+#intro .boot { text-align:center; }
+#intro .boot b { display:block; color:var(--accent); margin-bottom:12px; font-size:13px; }
+#intro .bar { width:200px; height:1px; background:var(--ink-faint); margin:16px auto 0; overflow:hidden; }
+#intro .bar i { display:block; height:100%; background:var(--accent); width:0; animation:load 1.4s ease forwards; }
+@keyframes load { to{width:100%} }
+
+@media(max-width:640px) { body{cursor:auto;} #cursor{display:none;} #hud-tl,#hud-tr,#hud-bl,#hud-br{font-size:9px;} }
 </style>
 </head>
 <body>
 
-<div id="webgl-container"></div>
+<div id="canvas-wrap"></div>
+<div id="cursor"></div>
 
 <aside id="hud-tl" class="hud">
   <div class="name"><span class="dot"></span><b>ajota.system</b></div>
-  <div class="sub">v.3.0 · webgl physics engine</div>
+  <div class="sub">v.3.0 · 3d orbital engine</div>
 </aside>
 <aside id="hud-tr" class="hud">
-  <div class="row"><span class="coord" id="coord">[ Z: 300 ]</span></div>
-  <div class="row" style="margin-top:6px"><span>online</span><span class="dot"></span></div>
+  <div class="row"><span id="cam-info" style="color:var(--ink-dim)">cam · 0,0,300</span></div>
+  <div class="row" style="margin-top:4px"><span>online</span><span class="dot"></span></div>
 </aside>
 <aside id="hud-bl" class="hud">
-  <div><kbd>scroll</kbd> navegar 3D · <kbd>click + arrastrar</kbd> pan / físicas</div>
+  <div><kbd>drag</kbd> orbitar · <kbd>scroll</kbd> volar · <kbd>right-drag</kbd> pan</div>
+  <div><kbd>hold+throw</kbd> lanzar planeta · <kbd>click</kbd> abrir · <kbd>T</kbd> terminal</div>
 </aside>
-<aside id="hud-br" class="hud"><div>made in madrid</div></aside>
+<aside id="hud-br" class="hud">
+  <div id="fps-el">60 fps</div>
+  <div style="margin-top:3px">made in mallorca</div>
+</aside>
 
 <div id="label"><span class="tag" id="label-tag">// project</span><span id="label-name">name</span></div>
 <div id="backdrop"></div>
 
 <section id="preview">
-  <h2 id="pv-title">Proyecto</h2>
-  <p id="pv-desc">Haz clic en un planeta para ver su información o ir a su enlace.</p>
-  <button id="pv-close">Cerrar modal</button>
+  <div class="pv-top">
+    <span class="pv-dot" id="pv-dot"></span>
+    <span id="pv-tag">// project</span>
+    <span class="pv-close" id="pv-close">×</span>
+  </div>
+  <h2 id="pv-title">GastOS</h2>
+  <div class="pv-role" id="pv-role">personal finance os</div>
+  <p id="pv-desc">desc</p>
+  <div class="pv-meta">
+    <div class="cell"><div class="k">stack</div><div class="v" id="pv-stack">—</div></div>
+    <div class="cell"><div class="k">status</div><div class="v" id="pv-status">—</div></div>
+    <div class="cell"><div class="k">year</div><div class="v" id="pv-year">—</div></div>
+  </div>
+  <div class="pv-actions">
+    <a id="pv-link" href="#" target="_blank" rel="noopener" class="primary">visitar →</a>
+    <button class="ghost" id="pv-cancel">volver</button>
+  </div>
 </section>
+
+<section id="terminal">
+  <header class="tb">
+    <span class="tlight"></span>
+    <span>ajota@system</span><span style="color:rgba(245,240,232,.2)">:</span><span class="tpath">~/orbit</span>
+    <span class="tclose" id="tclose">close · esc</span>
+  </header>
+  <div id="term-out"></div>
+  <div id="term-in-row">
+    <span class="tpr">ajota@system:~$</span>
+    <input id="term-in" type="text" autocomplete="off" spellcheck="false" autocapitalize="off">
+  </div>
+</section>
+
+<div id="leblanc"><div class="glitch" id="lb-text">MIRAGE // ENGAGED</div></div>
+<div id="intro"><div class="boot"><b>booting ajota.system</b><span id="boot-msg">initializing 3d engine…</span><div class="bar"><i></i></div></div></div>
 
 <script>
 (() => {
-  'use strict';
+'use strict';
 
-  // 1. CONFIGURACIÓN THREE.JS
-  const container = document.getElementById('webgl-container');
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xf5f0e8);
-  scene.fog = new THREE.Fog(0xf5f0e8, 200, 800);
+// ─── DATA ───────────────────────────────────────────────────────────────────
+const PROJECTS = [
+  { id:'gastos',   name:'GastOS',   tag:'// project · 01', role:'personal finance os',
+    size:10, color:0xc17f4a, hexStr:'#c17f4a', orbitR:80,  orbitTilt:0.18, orbitRoll:0.05, speed:0.004, phase:0.8,
+    desc:'Sistema operativo personal para entender en qué se va el dinero. <b>Categorías inteligentes</b>, presupuestos elásticos y dashboard.',
+    stack:'Next.js · TypeScript · Node', status:'beta', year:'2025', link:'https://gastos.angeljoan.com' },
+  { id:'github',   name:'GitHub',   tag:'// repo · 02',    role:'open source · commits',
+    size:8,  color:0x4a5568, hexStr:'#4a5568', orbitR:130, orbitTilt:-0.22, orbitRoll:0.12, speed:0.003, phase:2.1,
+    desc:'Donde vive el código que no rompe nada (todavía). <b>Repositorios públicos</b>, experimentos, scripts.',
+    stack:'TypeScript · Java · Python', status:'active', year:'—', link:'https://github.com/angeljoan1' },
+  { id:'tfg',      name:'TFG',      tag:'// research · 03', role:'self-sovereign identity',
+    size:13, color:0x7b8fa8, hexStr:'#7b8fa8', orbitR:185, orbitTilt:0.30, orbitRoll:-0.08, speed:0.002, phase:4.0,
+    desc:'TFG de ingeniería telemática. <b>Identidad descentralizada</b> con credenciales verificables, DIDs y wallet soberana.',
+    stack:'DIDs · VC · Solidity', status:'defendido', year:'2025', link:'https://github.com/angeljoan1' },
+  { id:'gaming',   name:'Stats',    tag:'// gaming · 04',  role:'rift telemetry',
+    size:7,  color:0x7a9e7e, hexStr:'#7a9e7e', orbitR:240, orbitTilt:-0.14, orbitRoll:0.20, speed:0.005, phase:5.5,
+    desc:'Estadísticas desde la Grieta del Invocador. <b>Mid lane main</b>, LeBlanc one-trick.',
+    stack:'Riot API · Next.js', status:'in-game', year:'always', link:'https://example.com/gaming' },
+  { id:'terminal', name:'Terminal', tag:'// secret · 05',  role:'sudo required',
+    size:11, color:0xa07898, hexStr:'#a07898', orbitR:300, orbitTilt:0.25, orbitRoll:-0.15, speed:0.0018, phase:0.2,
+    special:true,
+    desc:'una terminal. escribe <b>help</b>.',
+    stack:'sh · cli', status:'unlocked', year:'∞', link:null },
+];
 
-  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-  let targetCamZ = 300;
-  
-  // Variables de paneo. Iniciamos con el plano desplazado (Sol a la izquierda)
-  const panOffset = new THREE.Vector3(60, 0, 0); 
-  const targetPan = new THREE.Vector3(60, 0, 0);
-  camera.position.set(panOffset.x, panOffset.y, targetCamZ);
+// ─── THREE.JS SETUP ──────────────────────────────────────────────────────────
+const container = document.getElementById('canvas-wrap');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf5f0e8);
+scene.fog = new THREE.FogExp2(0xf5f0e8, 0.00085);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  container.appendChild(renderer.domElement);
+const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 1, 3000);
+camera.position.set(0, 120, 420);
+camera.lookAt(0, 0, 0);
 
-  // 2. ILUMINACIÓN PREMIUM
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-  scene.add(ambientLight);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+container.appendChild(renderer.domElement);
 
-  const topLight = new THREE.DirectionalLight(0xffffff, 0.5);
-  topLight.position.set(100, 200, 100);
-  scene.add(topLight);
+// Lights
+scene.add(new THREE.AmbientLight(0xfff8f0, 0.7));
+const sunLight = new THREE.PointLight(0xffe8cc, 2.2, 800);
+scene.add(sunLight);
+const rimLight = new THREE.DirectionalLight(0xd4e8ff, 0.4);
+rimLight.position.set(-200, 300, -100);
+scene.add(rimLight);
 
-  // 3. OBJETOS
-  const planets = [];
-  const planetData = [
-    { id: 'gastos', name: 'GastOS', tag: '// 01', size: 12, color: 0xc17f4a, orbit: 60, speed: 0.005 },
-    { id: 'github', name: 'GitHub', tag: '// 02', size: 10, color: 0x4a5568, orbit: 100, speed: 0.003 },
-    { id: 'tfg', name: 'TFG', tag: '// 03', size: 15, color: 0x7b8fa8, orbit: 150, speed: 0.002 },
-    { id: 'gaming', name: 'Stats', tag: '// 04', size: 9, color: 0x7a9e7e, orbit: 200, speed: 0.004 },
-    { id: 'terminal', name: 'Terminal', tag: '// 05', size: 14, color: 0xa07898, orbit: 250, speed: 0.0015 },
-  ];
+// ─── SUN ────────────────────────────────────────────────────────────────────
+const sunGeo = new THREE.SphereGeometry(22, 48, 48);
+const sunMat = new THREE.MeshStandardMaterial({
+  color: 0xfff8f0, emissive: 0xc17f4a, emissiveIntensity: 0.55, roughness: 0.6, metalness: 0.0
+});
+const sunMesh = new THREE.Mesh(sunGeo, sunMat);
+scene.add(sunMesh);
 
-  // Sol con material emisivo cálido
-  const sunGeometry = new THREE.SphereGeometry(20, 32, 32);
-  const sunMaterial = new THREE.MeshStandardMaterial({ 
-    color: 0xfaf7f1, 
-    emissive: 0xc17f4a,
-    emissiveIntensity: 0.4,
-    roughness: 0.8
+// Sun glow sprite
+const glowCanvas = document.createElement('canvas');
+glowCanvas.width = glowCanvas.height = 256;
+const gCtx = glowCanvas.getContext('2d');
+const gGrad = gCtx.createRadialGradient(128,128,0,128,128,128);
+gGrad.addColorStop(0, 'rgba(255,220,160,0.6)');
+gGrad.addColorStop(0.4, 'rgba(255,200,120,0.2)');
+gGrad.addColorStop(1, 'rgba(255,200,120,0)');
+gCtx.fillStyle = gGrad;
+gCtx.fillRect(0,0,256,256);
+const glowTex = new THREE.CanvasTexture(glowCanvas);
+const glowSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false }));
+glowSprite.scale.set(200, 200, 1);
+scene.add(glowSprite);
+
+// Ajota label on sun
+const labelCanvas = document.createElement('canvas');
+labelCanvas.width = 256; labelCanvas.height = 128;
+const lCtx = labelCanvas.getContext('2d');
+lCtx.fillStyle = 'rgba(0,0,0,0)';
+lCtx.fillRect(0,0,256,128);
+lCtx.font = 'bold 42px Outfit, sans-serif';
+lCtx.fillStyle = '#5a3a1a';
+lCtx.textAlign = 'center';
+lCtx.textBaseline = 'middle';
+lCtx.fillText('ajota', 128, 64);
+const labelTex = new THREE.CanvasTexture(labelCanvas);
+const labelSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex, transparent: true, depthWrite: false }));
+labelSprite.scale.set(55, 27, 1);
+scene.add(labelSprite);
+
+// ─── ORBIT RINGS ─────────────────────────────────────────────────────────────
+const orbitObjects = [];
+PROJECTS.forEach(data => {
+  const pts = [];
+  for (let i = 0; i <= 128; i++) {
+    const a = (i/128) * Math.PI * 2;
+    pts.push(new THREE.Vector3(Math.cos(a)*data.orbitR, 0, Math.sin(a)*data.orbitR));
+  }
+  const orbitGeo = new THREE.BufferGeometry().setFromPoints(pts);
+  const orbitMat = new THREE.LineBasicMaterial({ color: 0x1a1612, transparent: true, opacity: data.special ? 0.06 : 0.08 });
+  if (data.special) orbitMat.dashSize = 3; 
+  const orbitLine = new THREE.Line(orbitGeo, orbitMat);
+  // Apply tilt and roll
+  orbitLine.rotation.x = data.orbitTilt;
+  orbitLine.rotation.z = data.orbitRoll;
+  scene.add(orbitLine);
+  orbitObjects.push({ line: orbitLine, data });
+});
+
+// ─── PLANETS ─────────────────────────────────────────────────────────────────
+const planetMeshes = [];
+const planetPivots = []; // pivot for orbital tilt
+
+PROJECTS.forEach(data => {
+  // Pivot group for tilt
+  const pivot = new THREE.Group();
+  pivot.rotation.x = data.orbitTilt;
+  pivot.rotation.z = data.orbitRoll;
+  scene.add(pivot);
+
+  const geo = new THREE.SphereGeometry(data.size, 40, 40);
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: data.color,
+    roughness: 0.35,
+    metalness: 0.08,
+    clearcoat: 0.6,
+    clearcoatRoughness: 0.25,
+    envMapIntensity: 0.5,
   });
-  const sun = new THREE.Mesh(sunGeometry, sunMaterial);
-  scene.add(sun);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.castShadow = true;
 
-  // Luz puntual central para iluminar planetas desde el sol
-  const pointLight = new THREE.PointLight(0xffeacc, 1.0, 500);
-  scene.add(pointLight);
+  // Initial position
+  mesh.position.set(
+    Math.cos(data.phase) * data.orbitR,
+    0,
+    Math.sin(data.phase) * data.orbitR
+  );
 
-  // Anillos
-  planetData.forEach(data => {
-    const ringGeo = new THREE.RingGeometry(data.orbit - 0.5, data.orbit + 0.5, 64);
-    const ringMat = new THREE.MeshBasicMaterial({ color: 0x1a1612, opacity: 0.08, transparent: true, side: THREE.DoubleSide });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.rotation.x = Math.PI / 2;
-    scene.add(ring);
-  });
+  pivot.add(mesh);
 
-  // Planetas con material físico
-  const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
-  planetData.forEach((data) => {
-    const material = new THREE.MeshPhysicalMaterial({
-      color: data.color, roughness: 0.3, metalness: 0.1, clearcoat: 0.5, clearcoatRoughness: 0.2
-    });
-    const planet = new THREE.Mesh(sphereGeometry, material);
-    planet.scale.set(data.size, data.size, data.size);
-    
-    // Posición inicial en la órbita
-    const initialAngle = Math.random() * Math.PI * 2;
-    planet.position.x = Math.cos(initialAngle) * data.orbit;
-    planet.position.z = Math.sin(initialAngle) * data.orbit;
-    
-    planet.userData = { ...data, angle: initialAngle, vx: 0, vy: 0, vz: 0 };
-    scene.add(planet);
-    planets.push(planet);
-  });
+  // Physics state (world-space)
+  mesh.userData = {
+    ...data,
+    angle: data.phase,
+    vx: 0, vy: 0, vz: 0,
+    pivot,
+    dragged: false,
+    dragVel: new THREE.Vector3(),
+  };
 
-  // 4. INTERACCIÓN Y FÍSICAS
-  const raycaster = new THREE.Raycaster();
-  const mouse = new THREE.Vector2();
-  let hoveredPlanet = null;
-  
-  let isDragging = false;
-  let isPanning = false;
-  let draggedPlanet = null;
-  let previousMouse = { x: 0, y: 0 };
+  planetMeshes.push(mesh);
+  planetPivots.push(pivot);
+});
 
-  const labelEl = document.getElementById('label');
+// ─── STARFIELD (subtle warm dots) ─────────────────────────────────────────────
+const starGeo = new THREE.BufferGeometry();
+const starPositions = new Float32Array(600 * 3);
+for (let i = 0; i < 600; i++) {
+  starPositions[i*3]   = (Math.random()-0.5) * 2400;
+  starPositions[i*3+1] = (Math.random()-0.5) * 2400;
+  starPositions[i*3+2] = (Math.random()-0.5) * 2400;
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+const starMat = new THREE.PointsMaterial({ color: 0xc8a878, size: 1.2, transparent: true, opacity: 0.35 });
+scene.add(new THREE.Points(starGeo, starMat));
 
-  window.addEventListener('mousedown', (e) => {
-    if (hoveredPlanet) {
-      isDragging = true;
-      draggedPlanet = hoveredPlanet;
-      // Detener inercia al agarrar
-      draggedPlanet.userData.vx = 0;
-      draggedPlanet.userData.vy = 0;
-      draggedPlanet.userData.vz = 0;
-    } else {
-      isPanning = true;
+// ─── ORBIT CONTROLS (manual) ─────────────────────────────────────────────────
+const orbitState = {
+  theta: 0.3, phi: 1.1, radius: 420,
+  targetTheta: 0.3, targetPhi: 1.1, targetRadius: 420,
+  panX: 0, panY: 0, targetPanX: 0, targetPanY: 0,
+  isDragging: false, isPanning: false,
+  lastX: 0, lastY: 0,
+};
+
+// ─── DRAG STATE ───────────────────────────────────────────────────────────────
+const dragState = {
+  active: false,
+  planet: null,
+  plane: new THREE.Plane(),
+  startPos: new THREE.Vector3(),
+  prevPos: new THREE.Vector3(),
+  vel: new THREE.Vector3(),
+  prevTime: 0,
+  startMouse: { x: 0, y: 0 },
+};
+
+// ─── RAYCASTER ────────────────────────────────────────────────────────────────
+const raycaster = new THREE.Raycaster();
+const mouse2d = new THREE.Vector2();
+let hoveredMesh = null;
+
+// ─── DOM REFS ─────────────────────────────────────────────────────────────────
+const cursorEl  = document.getElementById('cursor');
+const labelEl   = document.getElementById('label');
+const labelTag  = document.getElementById('label-tag');
+const labelName = document.getElementById('label-name');
+const backdrop  = document.getElementById('backdrop');
+const previewEl = document.getElementById('preview');
+const termEl    = document.getElementById('terminal');
+const termOut   = document.getElementById('term-out');
+const termIn    = document.getElementById('term-in');
+const lbEl      = document.getElementById('leblanc');
+const lbText    = document.getElementById('lb-text');
+const fpsEl     = document.getElementById('fps-el');
+const camInfoEl = document.getElementById('cam-info');
+const introEl   = document.getElementById('intro');
+const bootMsgEl = document.getElementById('boot-msg');
+
+let termOpen = false, isTyping = false, cmdHistory = [], histIdx = 0, termBooted = false;
+
+// ─── POINTER EVENTS ──────────────────────────────────────────────────────────
+function getMouseNDC(e) {
+  return {
+    x: (e.clientX / innerWidth) * 2 - 1,
+    y: -(e.clientY / innerHeight) * 2 + 1
+  };
+}
+
+renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+
+renderer.domElement.addEventListener('mousedown', e => {
+  if (e.button === 2) { // right click = pan
+    orbitState.isPanning = true;
+    orbitState.lastX = e.clientX; orbitState.lastY = e.clientY;
+    return;
+  }
+  if (e.button !== 0) return;
+
+  // check hit on planet
+  const ndc = getMouseNDC(e);
+  mouse2d.set(ndc.x, ndc.y);
+  raycaster.setFromCamera(mouse2d, camera);
+  const hits = raycaster.intersectObjects(planetMeshes);
+
+  if (hits.length > 0) {
+    const mesh = hits[0].object;
+    dragState.active = true;
+    dragState.planet = mesh;
+    dragState.startMouse = { x: e.clientX, y: e.clientY };
+    dragState.prevTime = performance.now();
+    dragState.vel.set(0,0,0);
+
+    // Create drag plane facing camera
+    const camDir = new THREE.Vector3();
+    camera.getWorldDirection(camDir);
+    dragState.plane.setFromNormalAndCoplanarPoint(camDir, mesh.getWorldPosition(new THREE.Vector3()));
+    dragState.prevPos.copy(mesh.getWorldPosition(new THREE.Vector3()));
+
+    mesh.userData.dragged = true;
+    mesh.userData.vx = 0; mesh.userData.vy = 0; mesh.userData.vz = 0;
+    cursorEl.classList.add('grab');
+  } else {
+    orbitState.isDragging = true;
+    orbitState.lastX = e.clientX; orbitState.lastY = e.clientY;
+  }
+});
+
+window.addEventListener('mousemove', e => {
+  cursorEl.style.transform = `translate(${e.clientX}px,${e.clientY}px) translate(-50%,-50%)`;
+  const ndc = getMouseNDC(e);
+  mouse2d.set(ndc.x, ndc.y);
+
+  if (dragState.active && dragState.planet) {
+    // Move planet in 3D on drag plane
+    raycaster.setFromCamera(mouse2d, camera);
+    const pt = new THREE.Vector3();
+    raycaster.ray.intersectPlane(dragState.plane, pt);
+    if (pt) {
+      const now = performance.now();
+      const dt = Math.max((now - dragState.prevTime) / 1000, 0.001);
+      dragState.vel.copy(pt).sub(dragState.prevPos).divideScalar(dt);
+      dragState.prevPos.copy(pt);
+      dragState.prevTime = now;
+
+      // Move mesh in world space via its pivot
+      const pivot = dragState.planet.userData.pivot;
+      const localPt = pivot.worldToLocal(pt.clone());
+      dragState.planet.position.copy(localPt);
     }
-    previousMouse = { x: e.clientX, y: e.clientY };
-  });
-
-  window.addEventListener('mousemove', (e) => {
-    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-
-    const deltaX = e.clientX - previousMouse.x;
-    const deltaY = e.clientY - previousMouse.y;
-
-    if (isDragging && draggedPlanet) {
-      document.body.style.cursor = 'grabbing';
-      const factor = targetCamZ / 800; // Sensibilidad basada en el zoom
-      draggedPlanet.position.x += deltaX * factor;
-      draggedPlanet.position.y -= deltaY * factor;
-      
-      draggedPlanet.userData.vx = deltaX * factor * 0.5;
-      draggedPlanet.userData.vy = -deltaY * factor * 0.5;
-      
-    } else if (isPanning) {
-      document.body.style.cursor = 'grabbing';
-      const factor = targetCamZ / 800;
-      targetPan.x -= deltaX * factor;
-      targetPan.y += deltaY * factor;
-      
-    } else {
-      // Paralaje sutil con el ratón cuando no arrastramos
-      targetPan.x += (mouse.x * 10 - targetPan.x) * 0.05;
-      targetPan.y += (mouse.y * 10 - targetPan.y) * 0.05;
-
-      // Raycast para Hover
-      raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObjects(planets);
-      if (intersects.length > 0) {
-        hoveredPlanet = intersects[0].object;
-        document.body.style.cursor = 'grab';
-        labelEl.classList.add('show');
-        labelEl.style.left = e.clientX + 'px';
-        labelEl.style.top = e.clientY + 'px';
-        document.getElementById('label-name').textContent = hoveredPlanet.userData.name;
-        document.getElementById('label-tag').textContent = hoveredPlanet.userData.tag;
-      } else {
-        hoveredPlanet = null;
-        document.body.style.cursor = 'default';
-        labelEl.classList.remove('show');
-      }
-    }
-    previousMouse = { x: e.clientX, y: e.clientY };
-  });
-
-  window.addEventListener('mouseup', () => {
-    if (isDragging && draggedPlanet) {
-      // Abrir modal si fue un "clic" (movimiento casi nulo)
-      if (Math.abs(draggedPlanet.userData.vx) < 0.5 && Math.abs(draggedPlanet.userData.vy) < 0.5) {
-        document.getElementById('pv-title').textContent = draggedPlanet.userData.name;
-        document.getElementById('backdrop').classList.add('show');
-        document.getElementById('preview').classList.add('show');
-      }
-    }
-    isDragging = false;
-    draggedPlanet = null;
-    isPanning = false;
-    document.body.style.cursor = 'default';
-  });
-
-  window.addEventListener('wheel', (e) => {
-    targetCamZ += e.deltaY * 0.3;
-    targetCamZ = Math.max(10, Math.min(targetCamZ, 400));
-    document.getElementById('coord').textContent = `[ Z: ${Math.round(targetCamZ)} ]`;
-  });
-
-  document.getElementById('pv-close').addEventListener('click', () => {
-    document.getElementById('backdrop').classList.remove('show');
-    document.getElementById('preview').classList.remove('show');
-  });
-
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
-
-  // 5. ANIMACIÓN Y FÍSICAS
-  function animate() {
-    requestAnimationFrame(animate);
-
-    // Cámara fluida
-    camera.position.z += (targetCamZ - camera.position.z) * 0.08;
-    panOffset.lerp(targetPan, 0.1);
-    camera.position.x = panOffset.x;
-    camera.position.y = panOffset.y;
-    camera.lookAt(panOffset.x, panOffset.y, 0);
-
-    // Órbitas y Físicas
-    planets.forEach(planet => {
-      const data = planet.userData;
-      
-      if (draggedPlanet !== planet) {
-        data.angle += data.speed;
-        const targetX = Math.cos(data.angle) * data.orbit;
-        const targetZ = Math.sin(data.angle) * data.orbit;
-        const targetY = 0; 
-        
-        // Efecto resorte elástico
-        const fx = (targetX - planet.position.x) * 0.015;
-        const fy = (targetY - planet.position.y) * 0.015;
-        const fz = (targetZ - planet.position.z) * 0.015;
-
-        data.vx = (data.vx || 0) + fx;
-        data.vy = (data.vy || 0) + fy;
-        data.vz = (data.vz || 0) + fz;
-
-        // Fricción
-        data.vx *= 0.94;
-        data.vy *= 0.94;
-        data.vz *= 0.94;
-
-        planet.position.x += data.vx;
-        planet.position.y += data.vy;
-        planet.position.z += data.vz;
-      }
-
-      planet.rotation.y += 0.01;
-      planet.rotation.x += 0.005;
-    });
-
-    renderer.render(scene, camera);
+    return;
   }
 
-  animate();
+  if (orbitState.isDragging) {
+    const dx = e.clientX - orbitState.lastX;
+    const dy = e.clientY - orbitState.lastY;
+    orbitState.targetTheta -= dx * 0.008;
+    orbitState.targetPhi   -= dy * 0.008;
+    orbitState.targetPhi = Math.max(0.15, Math.min(Math.PI - 0.15, orbitState.targetPhi));
+    orbitState.lastX = e.clientX; orbitState.lastY = e.clientY;
+    return;
+  }
+
+  if (orbitState.isPanning) {
+    const dx = e.clientX - orbitState.lastX;
+    const dy = e.clientY - orbitState.lastY;
+    const panScale = orbitState.radius * 0.001;
+    orbitState.targetPanX -= dx * panScale;
+    orbitState.targetPanY += dy * panScale;
+    orbitState.lastX = e.clientX; orbitState.lastY = e.clientY;
+    return;
+  }
+
+  // Hover detection
+  if (!termOpen && !previewEl.classList.contains('show')) {
+    raycaster.setFromCamera(mouse2d, camera);
+    const hits = raycaster.intersectObjects(planetMeshes);
+    if (hits.length > 0) {
+      hoveredMesh = hits[0].object;
+      cursorEl.classList.add('hover');
+      labelTag.textContent = hoveredMesh.userData.tag;
+      labelName.textContent = hoveredMesh.userData.name;
+      labelEl.classList.add('show');
+      labelEl.style.left = e.clientX + 'px';
+      labelEl.style.top  = e.clientY + 'px';
+    } else {
+      hoveredMesh = null;
+      cursorEl.classList.remove('hover');
+      labelEl.classList.remove('show');
+    }
+  }
+});
+
+window.addEventListener('mouseup', e => {
+  if (dragState.active && dragState.planet) {
+    const mesh = dragState.planet;
+    const moved = Math.hypot(e.clientX - dragState.startMouse.x, e.clientY - dragState.startMouse.y);
+    const speed = dragState.vel.length();
+
+    if (moved < 8 && speed < 5) {
+      // Click — open modal
+      openPreview(mesh.userData);
+    } else {
+      // Throw — apply velocity
+      const throwScale = 0.08;
+      mesh.userData.vx = dragState.vel.x * throwScale;
+      mesh.userData.vy = dragState.vel.y * throwScale;
+      mesh.userData.vz = dragState.vel.z * throwScale;
+      const spd = Math.hypot(mesh.userData.vx, mesh.userData.vy, mesh.userData.vz);
+      const MAX = 18;
+      if (spd > MAX) { mesh.userData.vx*=MAX/spd; mesh.userData.vy*=MAX/spd; mesh.userData.vz*=MAX/spd; }
+    }
+    mesh.userData.dragged = false;
+    dragState.active = false;
+    dragState.planet = null;
+  }
+  orbitState.isDragging = false;
+  orbitState.isPanning = false;
+  cursorEl.classList.remove('grab');
+});
+
+window.addEventListener('wheel', e => {
+  e.preventDefault();
+  orbitState.targetRadius += e.deltaY * 0.5;
+  orbitState.targetRadius = Math.max(50, Math.min(900, orbitState.targetRadius));
+}, { passive: false });
+
+// ─── PLANET COLLISIONS ────────────────────────────────────────────────────────
+function checkCollisions() {
+  for (let i = 0; i < planetMeshes.length; i++) {
+    for (let j = i+1; j < planetMeshes.length; j++) {
+      const a = planetMeshes[i], b = planetMeshes[j];
+      const pa = a.getWorldPosition(new THREE.Vector3());
+      const pb = b.getWorldPosition(new THREE.Vector3());
+      const dist = pa.distanceTo(pb);
+      const minDist = a.userData.size + b.userData.size + 2;
+      if (dist < minDist && dist > 0.01) {
+        const normal = pa.clone().sub(pb).normalize();
+        const overlap = minDist - dist;
+        // Push apart
+        const pivA = a.userData.pivot, pivB = b.userData.pivot;
+        const localNormA = pivA.worldToLocal(pa.clone().add(normal.clone().multiplyScalar(overlap * 0.5))).sub(pivA.worldToLocal(pa));
+        const localNormB = pivB.worldToLocal(pb.clone().sub(normal.clone().multiplyScalar(overlap * 0.5))).sub(pivB.worldToLocal(pb));
+        a.position.add(localNormA);
+        b.position.add(localNormB);
+        // Elastic velocity exchange
+        const relVel = new THREE.Vector3(a.userData.vx-b.userData.vx, a.userData.vy-b.userData.vy, a.userData.vz-b.userData.vz);
+        const dot = relVel.dot(normal);
+        if (dot < 0) {
+          const restitution = 0.7;
+          a.userData.vx -= (1+restitution)*dot*normal.x*0.5;
+          a.userData.vy -= (1+restitution)*dot*normal.y*0.5;
+          a.userData.vz -= (1+restitution)*dot*normal.z*0.5;
+          b.userData.vx += (1+restitution)*dot*normal.x*0.5;
+          b.userData.vy += (1+restitution)*dot*normal.y*0.5;
+          b.userData.vz += (1+restitution)*dot*normal.z*0.5;
+        }
+      }
+    }
+  }
+}
+
+// ─── PHYSICS UPDATE ───────────────────────────────────────────────────────────
+function updatePlanets(dt) {
+  planetMeshes.forEach(mesh => {
+    const d = mesh.userData;
+    if (d.dragged) { d.angle = Math.atan2(mesh.position.z, mesh.position.x); return; }
+
+    d.angle += d.speed;
+    const tx = Math.cos(d.angle) * d.orbitR;
+    const ty = 0;
+    const tz = Math.sin(d.angle) * d.orbitR;
+
+    // Spring to orbit
+    const SPRING = 0.012;
+    let fx = (tx - mesh.position.x) * SPRING;
+    let fy = (ty - mesh.position.y) * SPRING;
+    let fz = (tz - mesh.position.z) * SPRING;
+
+    const distFromOrbit = Math.hypot(mesh.position.x-tx, mesh.position.y-ty, mesh.position.z-tz);
+    const damp = distFromOrbit > 30 ? 0.88 : 0.78;
+
+    d.vx = (d.vx + fx) * damp;
+    d.vy = (d.vy + fy) * damp;
+    d.vz = (d.vz + fz) * damp;
+
+    mesh.position.x += d.vx;
+    mesh.position.y += d.vy;
+    mesh.position.z += d.vz;
+
+    // Self rotation
+    mesh.rotation.y += 0.008;
+    mesh.rotation.x += 0.003;
+  });
+
+  checkCollisions();
+}
+
+// ─── CAMERA UPDATE ───────────────────────────────────────────────────────────
+function updateCamera() {
+  orbitState.theta += (orbitState.targetTheta - orbitState.theta) * 0.07;
+  orbitState.phi   += (orbitState.targetPhi   - orbitState.phi)   * 0.07;
+  orbitState.radius += (orbitState.targetRadius - orbitState.radius) * 0.07;
+  orbitState.panX  += (orbitState.targetPanX - orbitState.panX) * 0.08;
+  orbitState.panY  += (orbitState.targetPanY - orbitState.panY) * 0.08;
+
+  const r = orbitState.radius;
+  camera.position.x = r * Math.sin(orbitState.phi) * Math.sin(orbitState.theta) + orbitState.panX;
+  camera.position.y = r * Math.cos(orbitState.phi) + orbitState.panY;
+  camera.position.z = r * Math.sin(orbitState.phi) * Math.cos(orbitState.theta);
+  camera.lookAt(orbitState.panX, orbitState.panY, 0);
+
+  // HUD
+  camInfoEl.textContent = `cam · ${Math.round(orbitState.radius)}u`;
+}
+
+// ─── PREVIEW MODAL ────────────────────────────────────────────────────────────
+function openPreview(data) {
+  if (data.special) { openTerminal(); return; }
+  document.getElementById('pv-dot').style.cssText = `background:${data.hexStr};box-shadow:0 0 10px ${data.hexStr}`;
+  document.getElementById('pv-tag').textContent = data.tag;
+  document.getElementById('pv-title').textContent = data.name;
+  document.getElementById('pv-role').textContent = data.role;
+  document.getElementById('pv-desc').innerHTML = data.desc;
+  document.getElementById('pv-stack').textContent = data.stack;
+  document.getElementById('pv-status').textContent = data.status;
+  document.getElementById('pv-year').textContent = data.year;
+  document.getElementById('pv-link').href = data.link || '#';
+  backdrop.classList.add('show');
+  previewEl.classList.add('show');
+}
+
+function closeAll() {
+  backdrop.classList.remove('show');
+  previewEl.classList.remove('show');
+  closeTerminal();
+}
+
+document.getElementById('pv-close').addEventListener('click', closeAll);
+document.getElementById('pv-cancel').addEventListener('click', closeAll);
+backdrop.addEventListener('click', closeAll);
+
+// ─── TERMINAL ─────────────────────────────────────────────────────────────────
+function openTerminal() {
+  backdrop.classList.add('show');
+  termEl.classList.add('show');
+  termOpen = true;
+  if (!termBooted) { termBooted = true; bootTerminal(); }
+  else setTimeout(() => termIn.focus(), 80);
+}
+function closeTerminal() {
+  termEl.classList.remove('show');
+  termOpen = false;
+  if (!previewEl.classList.contains('show')) backdrop.classList.remove('show');
+}
+document.getElementById('tclose').addEventListener('click', closeTerminal);
+
+function tPrint(html, cls='') {
+  const d = document.createElement('div');
+  d.className = 'tl ' + cls;
+  d.innerHTML = html;
+  termOut.appendChild(d);
+  termOut.scrollTop = termOut.scrollHeight;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function tType(html, cls='', speed=11) {
+  isTyping = true; termIn.disabled = true;
+  const d = document.createElement('div');
+  d.className = 'tl ' + cls;
+  termOut.appendChild(d);
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  const target = tmp.innerHTML;
+  let i = 0;
+  while (i <= target.length) {
+    if (target[i] === '<') { const e = target.indexOf('>', i); if (e !== -1) { i = e+1; } else break; }
+    else i++;
+    d.innerHTML = target.slice(0, i);
+    termOut.scrollTop = termOut.scrollHeight;
+    if (target[i-1] && target[i-1] !== ' ') await sleep(speed);
+  }
+  isTyping = false; termIn.disabled = false;
+  setTimeout(() => termIn.focus(), 10);
+}
+
+async function bootTerminal() {
+  termOut.innerHTML = '';
+  await sleep(100);
+  await tType(`<span class="tc">ajota.terminal</span> <span class="td">v.3.0 · 3d orbital system · type</span> <span class="tu">help</span>`, '', 7);
+  await tType(`<span class="td">connected · ${new Date().toISOString().slice(0,19).replace('T',' ')} · ${PROJECTS.length} nodes in orbit</span>`, '', 5);
+  tPrint('&nbsp;');
+  termIn.disabled = false; termIn.focus();
+}
+
+const CMDS = {
+  help: async () => {
+    await tType('<span class="td">available commands:</span>');
+    const rows = [
+      ['help','mostrar esta ayuda'], ['whoami','about · bio'],
+      ['ls','listar planetas/proyectos'], ['open &lt;name&gt;','abrir proyecto'],
+      ['orbit','info del sistema orbital'], ['clear','limpiar terminal'],
+      ['exit','cerrar terminal'], ['<span class="td">…</span>','<span class="td">hay comandos ocultos</span>'],
+    ];
+    for (const [c,d] of rows) await tType(`  <span class="tc">${c.padEnd(16)}</span>  <span class="td">${d}</span>`,'',3);
+  },
+  whoami: async () => {
+    await tType('<span class="tc">ajota</span>  <span class="td">·</span>  ingeniero telemático & developer');
+    await tType('<span class="td">──────────────────────────────────────</span>','',2);
+    await tType('  construyo <span class="tu">software que conecta cosas</span> y se siente vivo.');
+    await tType('  identidad descentralizada · finanzas · interfaces que reaccionan.');
+    tPrint('&nbsp;');
+    await tType('  <span class="td">based in</span>  mallorca → mainland ES / EU');
+    await tType('  <span class="td">stack</span>     typescript · java · python · solidity');
+    await tType('  <span class="td">status</span>    <span class="tc">online</span>  ·  <span class="tm">idle on the rift</span>');
+    await tType('  <span class="td">hint</span>      try <span class="tu">sudo leblanc</span>');
+  },
+  ls: async () => {
+    await tType(`<span class="td">total ${PROJECTS.length} planets in orbit · tilt enabled</span>`);
+    for (const p of PROJECTS) {
+      const id = p.id.padEnd(10), role = p.role.padEnd(28);
+      await tType(`  <span class="tc">${id}</span> <span class="td">${role}</span> <span class="tu">${p.status}</span>`,'',3);
+    }
+    await tType('<span class="td">use </span><span class="tc">open &lt;name&gt;</span><span class="td"> to visit.</span>');
+  },
+  orbit: async () => {
+    await tType('<span class="td">orbital parameters:</span>');
+    for (const p of PROJECTS) {
+      await tType(`  <span class="tc">${p.name.padEnd(10)}</span> <span class="td">r=${p.orbitR}  tilt=${(p.orbitTilt*57.3).toFixed(1)}°  roll=${(p.orbitRoll*57.3).toFixed(1)}°  ω=${p.speed.toFixed(4)}</span>`,'',3);
+    }
+  },
+  open: async (arg) => {
+    if (!arg) { await tType('<span class="te">open: missing argument.</span> try <span class="tc">ls</span>'); return; }
+    const map = { gastos:'gastos', github:'github', git:'github', tfg:'tfg', gaming:'gaming', stats:'gaming', league:'gaming', terminal:'terminal' };
+    const id = map[arg.toLowerCase()] || arg.toLowerCase();
+    const p = PROJECTS.find(x => x.id === id);
+    if (!p) { await tType(`<span class="te">open: unknown planet '${arg}'</span>`); return; }
+    if (p.special) { await tType('<span class="tw">you\'re already here.</span>'); return; }
+    await tType(`<span class="td">launching</span> <span class="tc">${p.name}</span> <span class="td">…</span>`);
+    await sleep(220);
+    window.open(p.link, '_blank', 'noopener');
+  },
+  clear: async () => { termOut.innerHTML = ''; },
+  exit: async () => { await tType('<span class="td">disconnecting…</span>'); await sleep(180); closeTerminal(); },
+  pwd: async () => { await tType('<span class="tc">/home/ajota/orbit</span>'); },
+  date: async () => { await tType(new Date().toString()); },
+  echo: async (...a) => { await tType(a.join(' ')); },
+  cat: async (arg) => {
+    if (!arg) { await tType('<span class="te">cat: missing operand</span>'); return; }
+    if (['readme','README','README.md'].includes(arg)) {
+      await tType('<span class="tc"># ajota.system 3d</span>');
+      tPrint('');
+      await tType('  un portfolio que es un sistema solar en 3d.');
+      await tType('  lanza los planetas. colisionan. vuelven a órbita.');
+      await tType('  abre la terminal. escribe help. pierde el tiempo.');
+      tPrint('');
+      await tType('  <span class="td">— hecho con three.js, vanilla js y obsesión.</span>');
+    } else { await tType(`<span class="te">cat: ${arg}: no such file</span>`); }
+  },
+  sudo: async (...a) => {
+    if ((a[0]||'').toLowerCase() === 'leblanc') return CMDS.leblanc();
+    await tType('<span class="tw">[sudo] password for ajota:</span>');
+    await sleep(380);
+    await tType(`<span class="te">sudo: ${a.join(' ')}: command not found</span>`);
+  },
+  leblanc: async () => {
+    await tType('<span class="tm">[mirage_protocol]</span> <span class="td">authenticating…</span>');
+    await sleep(280);
+    await tType('<span class="tm">access granted. distortion online.</span>','',6);
+    await sleep(180);
+    runLeblanc();
+  },
+};
+
+function escHtml(s) { return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+async function runCommand(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed) return;
+  const parts = trimmed.split(/\s+/);
+  const cmd = parts[0].toLowerCase();
+  tPrint(`<span class="tp">ajota@system:~$</span> <span class="tu">${escHtml(trimmed)}</span>`);
+  cmdHistory.push(trimmed); histIdx = cmdHistory.length;
+  const fn = CMDS[cmd];
+  if (fn) await fn(...parts.slice(1));
+  else await tType(`<span class="te">${cmd}: command not found</span>  <span class="td">— try </span><span class="tc">help</span>`);
+  tPrint('&nbsp;');
+}
+
+termIn.addEventListener('keydown', async e => {
+  if (isTyping) { e.preventDefault(); return; }
+  if (e.key === 'Enter') { const v = termIn.value; termIn.value = ''; await runCommand(v); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); if (cmdHistory.length && histIdx > 0) { histIdx--; termIn.value = cmdHistory[histIdx]; } }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); if (histIdx < cmdHistory.length-1) { histIdx++; termIn.value = cmdHistory[histIdx]; } else { histIdx = cmdHistory.length; termIn.value = ''; } }
+  else if (e.key === 'l' && (e.ctrlKey||e.metaKey)) { e.preventDefault(); termOut.innerHTML = ''; }
+});
+
+// ─── LEBLANC ──────────────────────────────────────────────────────────────────
+const leblanc = { active: false, t: 0, dur: 6 };
+const lbRunes = [];
+const lbClones = [];
+
+function runLeblanc() {
+  if (leblanc.active) return;
+  leblanc.active = true; leblanc.t = 0;
+  lbRunes.length = 0; lbClones.length = 0;
+  lbEl.classList.add('show');
+
+  // 3D clones as glowing spheres
+  for (let i = 0; i < 7; i++) {
+    const geo = new THREE.SphereGeometry(8 + Math.random()*6, 16, 16);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xc94f8a, emissive: 0xc94f8a, emissiveIntensity: 0.8, transparent: true, opacity: 0.0 });
+    const mesh = new THREE.Mesh(geo, mat);
+    const ang = Math.random() * Math.PI * 2;
+    const dist = 60 + Math.random() * 200;
+    mesh.position.set(Math.cos(ang)*dist, (Math.random()-0.5)*100, Math.sin(ang)*dist);
+    scene.add(mesh);
+    lbClones.push({ mesh, born: i*0.6+0.2, life: 1.5, peak: false });
+  }
+
+  const phrases = ['MIRAGE // ENGAGED','DISTORTION','WHICH ONE IS REAL?','NEVER CHASE','AJOTA // AJOTA // AJOTA'];
+  let pi = 0;
+  const tick = setInterval(() => { lbText.textContent = phrases[pi++ % phrases.length]; }, 680);
+  setTimeout(() => {
+    clearInterval(tick);
+    lbEl.classList.remove('show');
+    lbClones.forEach(c => scene.remove(c.mesh));
+    leblanc.active = false;
+  }, leblanc.dur * 1000);
+}
+
+function updateLeblanc(dt) {
+  if (!leblanc.active) return;
+  leblanc.t += dt;
+  const lt = leblanc.t;
+  lbClones.forEach(c => {
+    const age = lt - c.born;
+    if (age < 0 || age > c.life) { c.mesh.material.opacity = 0; return; }
+    const k = age / c.life;
+    c.mesh.material.opacity = Math.sin(k * Math.PI) * 0.85;
+    c.mesh.rotation.y += 0.04;
+  });
+  // Color shift sun during leblanc
+  sunMat.emissive.setHex(leblanc.active ? 0xc94f8a : 0xc17f4a);
+  sunMat.emissiveIntensity = leblanc.active ? 0.7 : 0.55;
+}
+
+// ─── KEYBOARD ─────────────────────────────────────────────────────────────────
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { if (termOpen) closeTerminal(); else if (previewEl.classList.contains('show')) closeAll(); }
+  if (e.key === 't' && !termOpen && !previewEl.classList.contains('show') && !e.metaKey && !e.ctrlKey && document.activeElement !== termIn) { e.preventDefault(); openTerminal(); }
+});
+
+// ─── RESIZE ───────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ─── RENDER LOOP ──────────────────────────────────────────────────────────────
+let lastTime = performance.now();
+let fpsAcc = 0, fpsCount = 0;
+
+function animate(now) {
+  requestAnimationFrame(animate);
+  const dt = Math.min((now - lastTime) / 1000, 0.05);
+  lastTime = now;
+
+  // FPS
+  fpsAcc += dt; fpsCount++;
+  if (fpsAcc > 0.6) { fpsEl.textContent = Math.round(fpsCount/fpsAcc) + ' fps'; fpsAcc = 0; fpsCount = 0; }
+
+  updateCamera();
+  updatePlanets(dt);
+  updateLeblanc(dt);
+
+  // Sun pulse
+  const pulse = 1 + Math.sin(now*0.001) * 0.015;
+  sunMesh.scale.setScalar(pulse);
+  glowSprite.scale.set(200*pulse, 200*pulse, 1);
+  labelSprite.position.set(0, 0, 0);
+
+  renderer.render(scene, camera);
+}
+
+// ─── BOOT ─────────────────────────────────────────────────────────────────────
+const bootMsgs = ['initializing 3d engine…','spawning orbital system…','computing tilt matrices…','calibrating physics…','system online.'];
+let bi = 0;
+const bootTick = setInterval(() => {
+  bi++;
+  if (bi < bootMsgs.length) bootMsgEl.textContent = bootMsgs[bi];
+}, 280);
+setTimeout(() => {
+  clearInterval(bootTick);
+  introEl.classList.add('gone');
+  setTimeout(() => introEl.remove(), 700);
+}, 1450);
+
+requestAnimationFrame(animate);
+
 })();
 </script>
 </body>
