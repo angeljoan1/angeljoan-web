@@ -344,11 +344,11 @@ PROJECTS.forEach(data => {
   const geo = new THREE.SphereGeometry(data.size, 40, 40);
   const mat = new THREE.MeshPhysicalMaterial({
     color: data.color,
-    roughness: 0.35,
-    metalness: 0.08,
-    clearcoat: 0.6,
-    clearcoatRoughness: 0.25,
-    envMapIntensity: 0.5,
+    roughness: 0.55,
+    metalness: 0.06,
+    clearcoat: 0.25,
+    clearcoatRoughness: 0.4,
+    envMapIntensity: 0.3,
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.castShadow = true;
@@ -359,6 +359,53 @@ PROJECTS.forEach(data => {
     0,
     Math.sin(data.phase) * data.orbitR
   );
+
+  // Per-planet decorations
+  if (data.id === 'gastos') {
+    // Latitude bands — terracota financial grid
+    for (let i = 0; i < 3; i++) {
+      const rGeo = new THREE.TorusGeometry(data.size * 0.72 + i * data.size * 0.16, 0.28, 8, 48);
+      const rMat = new THREE.MeshBasicMaterial({ color: 0xe8a870, transparent: true, opacity: 0.22, side: THREE.DoubleSide });
+      const ring = new THREE.Mesh(rGeo, rMat);
+      ring.rotation.x = Math.PI/2 + (i - 1) * 0.45;
+      mesh.add(ring);
+    }
+  }
+  if (data.id === 'github') {
+    // Octahedron wireframe — star diffraction
+    const sGeo = new THREE.OctahedronGeometry(data.size * 1.45);
+    const sMat = new THREE.MeshBasicMaterial({ color: 0x8899aa, transparent: true, opacity: 0.13, wireframe: true });
+    mesh.add(new THREE.Mesh(sGeo, sMat));
+  }
+  if (data.id === 'tfg') {
+    // Saturn-style ring — identity/sovereignty
+    const rGeo = new THREE.TorusGeometry(data.size * 1.85, 1.1, 4, 72);
+    const rMat = new THREE.MeshBasicMaterial({ color: 0x9ab0c8, transparent: true, opacity: 0.38, side: THREE.DoubleSide });
+    const ring = new THREE.Mesh(rGeo, rMat);
+    ring.rotation.x = Math.PI / 2.6;
+    mesh.add(ring);
+    // Inner thinner ring
+    const rGeo2 = new THREE.TorusGeometry(data.size * 2.2, 0.4, 4, 72);
+    const rMat2 = new THREE.MeshBasicMaterial({ color: 0x7b8fa8, transparent: true, opacity: 0.20, side: THREE.DoubleSide });
+    const ring2 = new THREE.Mesh(rGeo2, rMat2);
+    ring2.rotation.x = Math.PI / 2.6;
+    mesh.add(ring2);
+  }
+  if (data.id === 'gaming') {
+    // Moon orbiting the planet
+    const moonGeo = new THREE.SphereGeometry(data.size * 0.30, 14, 14);
+    const moonMat = new THREE.MeshStandardMaterial({ color: 0xa8c8a8, roughness: 0.75, metalness: 0.0 });
+    const moon = new THREE.Mesh(moonGeo, moonMat);
+    moon.position.set(data.size * 2.3, 0, 0);
+    moon.userData.isMoon = true;
+    mesh.add(moon);
+  }
+  if (data.id === 'terminal') {
+    // Icosahedron wireframe cage — mysterious
+    const iGeo = new THREE.IcosahedronGeometry(data.size * 1.55, 0);
+    const iMat = new THREE.MeshBasicMaterial({ color: 0xb090a8, transparent: true, opacity: 0.18, wireframe: true });
+    mesh.add(new THREE.Mesh(iGeo, iMat));
+  }
 
   pivot.add(mesh);
 
@@ -455,10 +502,12 @@ renderer.domElement.addEventListener('mousedown', e => {
   const ndc = getMouseNDC(e);
   mouse2d.set(ndc.x, ndc.y);
   raycaster.setFromCamera(mouse2d, camera);
-  const hits = raycaster.intersectObjects(planetMeshes);
+  const hits = raycaster.intersectObjects(planetMeshes, true);
+  const filteredHits = hits.filter(h => planetMeshes.includes(h.object) || planetMeshes.includes(h.object.parent));
+  const realHits = filteredHits.map(h => ({ ...h, object: planetMeshes.includes(h.object) ? h.object : h.object.parent }));
 
-  if (hits.length > 0) {
-    const mesh = hits[0].object;
+  if (realHits.length > 0) {
+    const mesh = realHits[0].object;
     dragState.active = true;
     dragState.planet = mesh;
     dragState.startMouse = { x: e.clientX, y: e.clientY };
@@ -528,9 +577,10 @@ window.addEventListener('mousemove', e => {
   // Hover detection
   if (!termOpen && !previewEl.classList.contains('show')) {
     raycaster.setFromCamera(mouse2d, camera);
-    const hits = raycaster.intersectObjects(planetMeshes);
-    if (hits.length > 0) {
-      hoveredMesh = hits[0].object;
+    const hits = raycaster.intersectObjects(planetMeshes, true);
+    const hHit = hits.find(h => planetMeshes.includes(h.object) || planetMeshes.includes(h.object.parent));
+    if (hHit) {
+      hoveredMesh = planetMeshes.includes(hHit.object) ? hHit.object : hHit.object.parent;
       cursorEl.classList.add('hover');
       labelTag.textContent = hoveredMesh.userData.tag;
       labelName.textContent = hoveredMesh.userData.name;
@@ -615,7 +665,7 @@ function checkCollisions() {
 }
 
 // ─── PHYSICS UPDATE ───────────────────────────────────────────────────────────
-function updatePlanets(dt) {
+function updatePlanets(dt, now) {
   planetMeshes.forEach(mesh => {
     const d = mesh.userData;
     if (d.dragged) { d.angle = Math.atan2(mesh.position.z, mesh.position.x); return; }
@@ -642,9 +692,18 @@ function updatePlanets(dt) {
     mesh.position.y += d.vy;
     mesh.position.z += d.vz;
 
-    // Self rotation
+    // Self rotation — each planet has slight axis tilt
     mesh.rotation.y += 0.008;
     mesh.rotation.x += 0.003;
+
+    // Animate moon
+    mesh.children.forEach(child => {
+      if (child.userData.isMoon) {
+        const moonAngle = now * 0.0008;
+        child.position.x = Math.cos(moonAngle) * mesh.userData.size * 2.3;
+        child.position.z = Math.sin(moonAngle) * mesh.userData.size * 2.3;
+      }
+    });
   });
 
   checkCollisions();
@@ -929,7 +988,7 @@ function animate(now) {
   if (fpsAcc > 0.6) { fpsEl.textContent = Math.round(fpsCount/fpsAcc) + ' fps'; fpsAcc = 0; fpsCount = 0; }
 
   updateCamera();
-  updatePlanets(dt);
+  updatePlanets(dt, now);
   updateLeblanc(dt);
 
   // Sun pulse
