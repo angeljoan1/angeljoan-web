@@ -823,6 +823,8 @@ const CMDS = {
     await sleep(280);
     await tType('<span class="tm">access granted. distortion online.</span>','',6);
     await sleep(180);
+    closeTerminal();
+    await sleep(300);
     runLeblanc();
   },
 };
