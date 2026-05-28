@@ -3,39 +3,32 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>ajota.system</title>
+<title>ajota.system 3D</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
 <style>
   :root {
     --bg:          #f5f0e8;
-    --bg-soft:     #ede8de;
     --bg-card:     rgba(250,247,241,0.92);
     --ink:         #1a1612;
     --ink-dim:     #6b6157;
     --ink-faint:   #c8bfb0;
     --accent:      #c17f4a; 
-    --accent-soft: #d9a472;
-    --accent-deep: #8f5a2c;
-    --sage:        #7a9e7e; 
-    --dusty:       #7b8fa8; 
-    --mauve:       #a07898; 
-    --graphite:    #4a5568; 
     --magenta:     #c94f8a; 
-
     --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
     --font-mono: "DM Mono", ui-monospace, monospace;
   }
 
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: var(--font-sans); overflow: hidden; }
-  body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; cursor: crosshair; }
+  
+  /* El canvas de WebGL */
+  #webgl-container { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; }
 
-  /* ---------------- canvas ---------------- */
-  canvas#world { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
-
-  /* ---------------- HUD ---------------- */
+  /* ---------------- HUD (Se mantiene intacto) ---------------- */
   .hud { position: fixed; z-index: 10; color: var(--ink-dim); font-size: 11px; letter-spacing: .10em; text-transform: uppercase; font-weight: 500; user-select: none; pointer-events: none; }
   .hud b { color: var(--ink); font-weight: 600; }
   .hud .dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin-right: 8px; vertical-align: middle; animation: pulse 2.6s ease-in-out infinite; }
@@ -53,422 +46,222 @@
   #hud-bl kbd { display: inline-block; font-family: var(--font-mono); font-size: 10px; border: 1px solid var(--ink-faint); padding: 2px 6px; border-radius: 3px; color: var(--ink); margin: 0 2px; background: rgba(255,255,255,.02); }
 
   #hud-br { bottom: 22px; right: 28px; text-align: right; font-family: var(--font-mono); font-size: 10px; text-transform: none; letter-spacing: .04em; color: var(--ink-faint); }
-  #hud-br .fps { color: var(--ink-dim); }
-
-  /* ---------------- planet label ---------------- */
-  #label {
-    position: fixed; z-index: 9; pointer-events: none; opacity: 0;
-    transform: translate(-50%, calc(-100% - 30px));
-    transition: opacity .15s ease;
-    font-family: var(--font-mono); font-size: 11px; color: var(--ink);
-    letter-spacing: .10em; text-transform: uppercase; white-space: nowrap;
-  }
+  
+  #label { position: fixed; z-index: 9; pointer-events: none; opacity: 0; transform: translate(-50%, calc(-100% - 20px)); transition: opacity .15s ease; font-family: var(--font-mono); font-size: 11px; color: var(--ink); letter-spacing: .10em; text-transform: uppercase; white-space: nowrap; }
   #label .tag { display: block; color: var(--accent); font-size: 9px; margin-bottom: 3px; opacity: .9; }
   #label.show { opacity: 1; }
 
-  /* ---------------- Modals (Preview & Terminal) ---------------- */
-  /* (He compactado el CSS de la UI para no saturar, pero es funcional y respeta tu diseño original) */
-  #preview, #terminal { position: fixed; z-index: 40; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(.96); opacity: 0; pointer-events: none; transition: all .25s cubic-bezier(.2,.7,.2,1); font-family: var(--font-mono); }
+  /* Modales simplificados para no atascar el código */
+  #preview, #terminal { position: fixed; z-index: 40; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(.96); opacity: 0; pointer-events: none; transition: all .25s ease; font-family: var(--font-mono); }
   #preview.show, #terminal.show { opacity: 1; transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
   
-  #preview { width: min(440px, calc(100vw - 48px)); background: var(--bg-card); backdrop-filter: blur(20px); border: 1px solid var(--ink-faint); border-radius: 12px; padding: 28px; box-shadow: 0 20px 60px rgba(26,22,18,.12); font-family: var(--font-sans); }
-  #preview .top { display: flex; gap: 12px; margin-bottom: 18px; font-size: 10px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: .1em; align-items: center;}
-  #preview .planet-dot { width: 10px; height: 10px; border-radius: 50%; }
-  #preview .close { margin-left: auto; cursor: pointer; border: 1px solid var(--ink-faint); width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; }
-  #preview h2 { font-size: 30px; margin: 0 0 6px; }
-  #preview .role { font-family: var(--font-mono); font-size: 10px; color: var(--accent); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 18px; }
-  #preview p { color: var(--ink-dim); font-size: 14px; line-height: 1.6; margin-bottom: 22px; }
-  #preview .actions { display: flex; gap: 10px; }
-  #preview a, #preview button { flex: 1; padding: 11px; border-radius: 8px; font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; cursor: pointer; text-align: center; text-decoration: none; border: 1px solid transparent; }
-  #preview a.primary { background: var(--ink); color: var(--bg); }
-  #preview button.ghost { background: transparent; color: var(--ink); border-color: var(--ink-faint); }
-
-  #terminal { width: min(720px, calc(100vw - 48px)); height: min(540px, calc(100vh - 48px)); background: #1a1612; border: 1px solid rgba(193,127,74,.25); border-radius: 12px; display: flex; flex-direction: column; box-shadow: 0 40px 100px rgba(26,22,18,.35); color: rgba(245,240,232,.9); }
-  #terminal header { padding: 10px 14px; border-bottom: 1px solid rgba(193,127,74,.15); font-size: 10px; display: flex; gap: 10px; align-items: center; text-transform: uppercase;}
-  #terminal .close { margin-left: auto; cursor: pointer; color: var(--ink-dim); }
-  #term-output { flex: 1; padding: 18px; overflow-y: auto; font-size: 13px; line-height: 1.7; }
-  #term-input-row { display: flex; padding: 12px 18px; border-top: 1px solid rgba(193,127,74,.15); gap: 10px; align-items: center; }
-  #term-input { flex: 1; background: transparent; border: 0; outline: 0; color: inherit; font-family: inherit; font-size: 13px; }
-  .t-cyan { color: var(--accent-soft); } .t-dim { color: rgba(245,240,232,.4); } .t-err { color: #ff6b8a; } .t-prompt { color: var(--accent); }
+  #preview { width: 400px; background: var(--bg-card); backdrop-filter: blur(20px); border: 1px solid var(--ink-faint); border-radius: 12px; padding: 28px; font-family: var(--font-sans); }
+  #preview h2 { margin: 0 0 10px; font-size: 28px; color: var(--ink); }
+  #preview button { background: transparent; border: 1px solid var(--ink-faint); padding: 10px 15px; border-radius: 6px; cursor: pointer; text-transform: uppercase; letter-spacing: 2px; font-size: 10px; margin-top: 20px;}
 
   #backdrop { position: fixed; inset: 0; z-index: 20; background: rgba(245,240,232,0.6); backdrop-filter: blur(4px); opacity: 0; pointer-events: none; transition: opacity .2s; }
   #backdrop.show { opacity: 1; pointer-events: auto; }
-
-  /* LeBlanc Easter Egg */
-  #leblanc { position: fixed; inset: 0; z-index: 60; pointer-events: none; opacity: 0; background: radial-gradient(circle, rgba(201,79,138,.08), transparent 60%); transition: opacity .2s; }
-  #leblanc.show { opacity: 1; }
-  #leblanc .glitch { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); font-family: var(--font-mono); font-size: 11px; letter-spacing: .3em; color: var(--magenta); text-shadow: 0 0 12px rgba(201,79,138,.4); }
 </style>
 </head>
 <body>
 
-<canvas id="world"></canvas>
+<div id="webgl-container"></div>
 
 <aside id="hud-tl" class="hud">
   <div class="name"><span class="dot"></span><b>ajota.system</b></div>
-  <div class="sub">v.2.0 · interactive physics field</div>
+  <div class="sub">v.3.0 · webgl engine</div>
 </aside>
 <aside id="hud-tr" class="hud">
-  <div class="row"><span class="coord" id="coord">[ Z: 1.00 | X: 000, Y: 000 ]</span></div>
+  <div class="row"><span class="coord" id="coord">[ Z: 300 ]</span></div>
   <div class="row" style="margin-top:6px"><span>online</span><span class="dot"></span></div>
 </aside>
 <aside id="hud-bl" class="hud">
-  <div><kbd>scroll</kbd> zoom · <kbd>arrastrar fondo</kbd> paneo</div>
-  <div><kbd>click</kbd> abrir · <kbd>T</kbd> terminal</div>
+  <div><kbd>scroll</kbd> navegar 3D · <kbd>mover ratón</kbd> paralaje</div>
+  <div><kbd>click</kbd> abrir nodos</div>
 </aside>
-<aside id="hud-br" class="hud"><div class="fps"><span id="fps">60</span> fps</div><div>engine active</div></aside>
+<aside id="hud-br" class="hud"><div>made in madrid</div></aside>
 
 <div id="label"><span class="tag" id="label-tag">// project</span><span id="label-name">name</span></div>
 <div id="backdrop"></div>
 
 <section id="preview">
-  <div class="top"><span class="planet-dot" id="pv-dot"></span><span id="pv-tag"></span><span class="close" id="pv-close">×</span></div>
-  <h2 id="pv-title">GastOS</h2>
-  <div class="role" id="pv-role"></div>
-  <p id="pv-desc"></p>
-  <div class="actions">
-    <a id="pv-link" href="#" target="_blank" class="primary">visitar →</a>
-    <button class="ghost" id="pv-cancel">volver</button>
-  </div>
+  <h2 id="pv-title">Proyecto</h2>
+  <p id="pv-desc">Haz clic en un planeta para ver su información o ir a su enlace.</p>
+  <button id="pv-close">Cerrar</button>
 </section>
-
-<section id="terminal">
-  <header><span>ajota@system:~/orbit</span><span class="close" id="term-close">esc</span></header>
-  <div id="term-output"></div>
-  <div id="term-input-row"><span class="prompt">ajota@system:~$</span><input id="term-input" type="text" autocomplete="off" spellcheck="false"></div>
-</section>
-
-<div id="leblanc"><div class="glitch" id="lb-text">MIRAGE // ENGAGED</div></div>
 
 <script>
 (() => {
   'use strict';
 
-  const canvas = document.getElementById('world');
-  const ctx = canvas.getContext('2d', { alpha: false });
-  const labelEl = document.getElementById('label');
-  const coordEl = document.getElementById('coord');
-  const fpsEl = document.getElementById('fps');
-  const backdrop = document.getElementById('backdrop');
-  const preview = document.getElementById('preview');
-  const termEl = document.getElementById('terminal');
-  
-  let W = 0, H = 0, cx = 0, cy = 0, dpr = Math.min(window.devicePixelRatio || 1, 2);
-  
-  // --- SISTEMA DE CÁMARA ---
-  const camera = { x: 0, y: 0, zoom: 1 };
-  
-  function toWorld(sx, sy) {
-    return {
-      x: (sx - cx) / camera.zoom + camera.x,
-      y: (sy - cy) / camera.zoom + camera.y
-    };
-  }
+  // 1. CONFIGURACIÓN BÁSICA DE THREE.JS
+  const container = document.getElementById('webgl-container');
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xf5f0e8); // El color crema de tu web
+  scene.fog = new THREE.Fog(0xf5f0e8, 200, 800); // Niebla para ocultar cosas a lo lejos
 
-  function toScreen(wx, wy) {
-    return {
-      x: (wx - camera.x) * camera.zoom + cx,
-      y: (wy - camera.y) * camera.zoom + cy
-    };
-  }
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+  let targetCamZ = 300; // Posición Z por defecto
+  camera.position.set(0, 0, targetCamZ);
 
-  function resize() {
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    W = window.innerWidth; H = window.innerHeight;
-    canvas.width = W * dpr; canvas.height = H * dpr;
-    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    cx = W / 2; cy = H / 2;
-    if(PROJECTS[0].x === undefined) layoutPlanets();
-  }
-  window.addEventListener('resize', resize);
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  container.appendChild(renderer.domElement);
 
-  // --- DATOS INCREMENTADOS (Premium Look) ---
-  const PROJECTS = [
-    { id: 'gastos', name: 'GastOS', tag: '// 01', role: 'finance', size: 32, color: '#c17f4a', orbit: 0.20, speed: 0.16, phase: 0.8, special: false, link: '#' },
-    { id: 'github', name: 'GitHub', tag: '// 02', role: 'open source', size: 26, color: '#4a5568', orbit: 0.30, speed: 0.13, phase: 2.1, special: false, link: '#' },
-    { id: 'tfg', name: 'TFG', tag: '// 03', role: 'identity', size: 38, color: '#7b8fa8', orbit: 0.40, speed: 0.10, phase: 4.0, special: false, link: '#' },
-    { id: 'gaming', name: 'Stats', tag: '// 04', role: 'telemetry', size: 22, color: '#7a9e7e', orbit: 0.50, speed: 0.08, phase: 5.5, special: false, link: '#' },
-    { id: 'terminal', name: 'Terminal', tag: '// 05', role: 'sudo', size: 34, color: '#a07898', orbit: 0.62, speed: 0.06, phase: 0.2, special: true, link: '#' },
+  // 2. ILUMINACIÓN (ESTUDIO / PREMIUM)
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); // Luz general
+  scene.add(ambientLight);
+
+  const pointLight = new THREE.PointLight(0xfff7e6, 1.2, 500); // Luz desde el centro (El Sol)
+  pointLight.position.set(0, 0, 0);
+  scene.add(pointLight);
+
+  const topLight = new THREE.DirectionalLight(0xffffff, 0.5); // Brillo desde arriba
+  topLight.position.set(100, 200, 100);
+  scene.add(topLight);
+
+  // 3. CREACIÓN DE OBJETOS
+  const planets = [];
+  const planetData = [
+    { id: 'gastos', name: 'GastOS', tag: '// 01', size: 12, color: 0xc17f4a, orbit: 60, speed: 0.005 },
+    { id: 'github', name: 'GitHub', tag: '// 02', size: 10, color: 0x4a5568, orbit: 100, speed: 0.003 },
+    { id: 'tfg', name: 'TFG', tag: '// 03', size: 15, color: 0x7b8fa8, orbit: 150, speed: 0.002 },
+    { id: 'gaming', name: 'Stats', tag: '// 04', size: 9, color: 0x7a9e7e, orbit: 200, speed: 0.004 },
+    { id: 'terminal', name: 'Terminal', tag: '// 05', size: 14, color: 0xa07898, orbit: 250, speed: 0.0015 },
   ];
 
-  function layoutPlanets() {
-    const m = Math.max(W, H);
-    for (const p of PROJECTS) {
-      p.r = p.orbit * m; 
-      p.angle = p.phase;
-      p.x = p.r * Math.cos(p.angle);
-      p.y = p.r * Math.sin(p.angle);
-      p.vx = 0; p.vy = 0;
-      p.mass = p.size; // La masa es proporcional al tamaño
-    }
-  }
+  // El Sol (Núcleo) - Material básico para que no tenga sombras propias y parezca una interfaz pura
+  const sunGeometry = new THREE.SphereGeometry(20, 32, 32);
+  const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+  scene.add(sun);
 
-  // --- INTERACCIÓN Y FÍSICAS ---
-  const mouse = { x: -999, y: -999, wx: 0, wy: 0, has: false };
-  const drag = { active: false, planet: null, isPan: false, startX: 0, startY: 0, camStartX: 0, camStartY: 0 };
-  let hover = null;
-
-  window.addEventListener('mousemove', e => {
-    mouse.x = e.clientX; mouse.y = e.clientY; mouse.has = true;
-    const w = toWorld(mouse.x, mouse.y);
-    
-    // Calcular velocidad real del ratón para físicas de lanzamiento
-    if (drag.active && drag.planet) {
-      drag.planet.vx = (w.x - mouse.wx) / globalDt * 0.5;
-      drag.planet.vy = (w.y - mouse.wy) / globalDt * 0.5;
-      drag.planet.x = w.x; drag.planet.y = w.y;
-    }
-    
-    if (drag.active && drag.isPan) {
-      camera.x = drag.camStartX - (e.clientX - drag.startX) / camera.zoom;
-      camera.y = drag.camStartY - (e.clientY - drag.startY) / camera.zoom;
-    }
-    
-    mouse.wx = w.x; mouse.wy = w.y;
+  // Anillos orbitales
+  planetData.forEach(data => {
+    const ringGeo = new THREE.RingGeometry(data.orbit - 0.5, data.orbit + 0.5, 64);
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0x1a1612, opacity: 0.05, transparent: true, side: THREE.DoubleSide });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    // Tumbar los anillos ligeramente para dar aspecto 3D
+    ring.rotation.x = Math.PI / 2;
+    scene.add(ring);
   });
 
-  window.addEventListener('wheel', e => {
-    e.preventDefault(); // Evitar scroll de la página
-    const zoomDelta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newZoom = Math.max(0.3, Math.min(camera.zoom * zoomDelta, 3.0));
+  // Los Planetas (Material Físico para que parezcan canicas de resina)
+  const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
+  
+  planetData.forEach((data) => {
+    const material = new THREE.MeshPhysicalMaterial({
+      color: data.color,
+      roughness: 0.3,
+      metalness: 0.1,
+      clearcoat: 0.5,
+      clearcoatRoughness: 0.2
+    });
     
-    // Matemáticas para hacer zoom hacia el ratón
-    const mouseWorldBefore = toWorld(mouse.x, mouse.y);
-    camera.zoom = newZoom;
-    const mouseWorldAfter = toWorld(mouse.x, mouse.y);
+    const planet = new THREE.Mesh(sphereGeometry, material);
+    planet.scale.set(data.size, data.size, data.size);
+    planet.userData = { ...data, angle: Math.random() * Math.PI * 2 };
     
-    camera.x += (mouseWorldBefore.x - mouseWorldAfter.x);
-    camera.y += (mouseWorldBefore.y - mouseWorldAfter.y);
-  }, { passive: false });
-
-  canvas.addEventListener('mousedown', e => {
-    const hit = hitTest(mouse.wx, mouse.wy);
-    if (hit) {
-      drag.active = true; drag.planet = hit; drag.isPan = false;
-    } else {
-      drag.active = true; drag.isPan = true;
-      drag.startX = e.clientX; drag.startY = e.clientY;
-      drag.camStartX = camera.x; drag.camStartY = camera.y;
-    }
+    scene.add(planet);
+    planets.push(planet);
   });
 
-  window.addEventListener('mouseup', e => {
-    if (drag.active && drag.planet) {
-      const sp = Math.hypot(drag.planet.vx, drag.planet.vy);
-      if (sp < 50) onPlanetClick(drag.planet); // Fue un click
-    }
-    drag.active = false; drag.planet = null; drag.isPan = false;
-  });
+  // 4. INTERACCIÓN Y RAYCASTER
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+  let hoveredPlanet = null;
+  const labelEl = document.getElementById('label');
 
-  function hitTest(wx, wy) {
-    for (const p of PROJECTS) {
-      if (Math.hypot(wx - p.x, wy - p.y) < p.size + 10) return p;
-    }
-    return null;
-  }
-
-  // --- MOTOR DE FÍSICAS ---
-  const SPRING_K = 1.2; 
-  const DAMPING = 0.96;
-
-  function updatePhysics(dt) {
-    // 1. Gravedad hacia la órbita natural
-    for (const p of PROJECTS) {
-      if (drag.active && drag.planet === p) continue;
-      
-      p.angle += p.speed * dt;
-      const tx = p.r * Math.cos(p.angle);
-      const ty = p.r * Math.sin(p.angle);
-      
-      const fx = (tx - p.x) * SPRING_K;
-      const fy = (ty - p.y) * SPRING_K;
-      
-      p.vx += fx * dt; p.vy += fy * dt;
-      p.vx *= DAMPING; p.vy *= DAMPING;
-      
-      p.x += p.vx * dt; p.y += p.vy * dt;
-    }
-
-    // 2. Colisiones Elásticas (Círculos)
-    for (let i = 0; i < PROJECTS.length; i++) {
-      for (let j = i + 1; j < PROJECTS.length; j++) {
-        const p1 = PROJECTS[i], p2 = PROJECTS[j];
-        const dx = p2.x - p1.x, dy = p2.y - p1.y;
-        const dist = Math.hypot(dx, dy);
-        const minDist = p1.size + p2.size + 5; // +5 de aura magnética
-
-        if (dist < minDist && dist > 0) {
-          // Resolución de penetración (separarlos físicamente)
-          const overlap = minDist - dist;
-          const nx = dx / dist, ny = dy / dist;
-          const m1 = drag.planet === p1 ? 0 : 1; // Si lo arrastramos, tiene masa infinita
-          const m2 = drag.planet === p2 ? 0 : 1;
-          const totalM = m1 + m2;
-          
-          if (totalM > 0) {
-            p1.x -= nx * overlap * (m1 / totalM);
-            p2.x += nx * overlap * (m2 / totalM);
-          }
-
-          // Resolución de velocidad (Transferencia de energía)
-          const kx = p1.vx - p2.vx;
-          const ky = p1.vy - p2.vy;
-          const p = 2 * (nx * kx + ny * ky) / (p1.mass + p2.mass);
-          
-          if (!drag.active || drag.planet !== p1) {
-            p1.vx -= p * p2.mass * nx; p1.vy -= p * p2.mass * ny;
-          }
-          if (!drag.active || drag.planet !== p2) {
-            p2.vx += p * p1.mass * nx; p2.vy += p * p1.mass * ny;
-          }
-        }
-      }
-    }
-  }
-
-  // --- RENDERIZADO PREMIUM ---
-  function adjustColor(color, amount) {
-    return '#' + color.replace(/^#/, '').replace(/../g, c => 
-      ('0' + Math.min(255, Math.max(0, parseInt(c, 16) + amount)).toString(16)).substr(-2)
-    );
-  }
-
-  function drawWorld(t) {
-    ctx.save();
-    // Centrar y aplicar cámara
-    ctx.translate(cx, cy);
-    ctx.scale(camera.zoom, camera.zoom);
-    ctx.translate(-camera.x, -camera.y);
-
-    // Dibujar Sol
-    ctx.save();
-    const aura = ctx.createRadialGradient(0, 0, 40, 0, 0, 100);
-    aura.addColorStop(0, 'rgba(193, 127, 74, 0.25)');
-    aura.addColorStop(1, 'rgba(193, 127, 74, 0)');
-    ctx.fillStyle = aura;
-    ctx.beginPath(); ctx.arc(0, 0, 100, 0, Math.PI * 2); ctx.fill();
-
-    ctx.shadowColor = 'rgba(26, 22, 18, 0.15)'; ctx.shadowBlur = 15; ctx.shadowOffsetY = 6;
-    const core = ctx.createRadialGradient(-15, -15, 0, 0, 0, 60);
-    core.addColorStop(0, '#ffffff'); core.addColorStop(0.4, '#faf7f1'); core.addColorStop(1, '#e3dacc');
-    ctx.fillStyle = core; ctx.beginPath(); ctx.arc(0, 0, 55, 0, Math.PI * 2); ctx.fill();
-    ctx.shadowColor = 'transparent';
+  window.addEventListener('mousemove', (e) => {
+    // Normalizar coordenadas del ratón de -1 a 1 para Three.js
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
     
-    ctx.fillStyle = '#1a1612'; ctx.font = '600 22px "Outfit"'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('ajota', 0, 2);
-    ctx.restore();
+    // Paralaje ligero de la cámara basado en el ratón
+    camera.position.x += (mouse.x * 20 - camera.position.x) * 0.05;
+    camera.position.y += (mouse.y * 20 - camera.position.y) * 0.05;
 
-    // Dibujar Órbitas
-    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(26,22,18,0.05)';
-    for(const p of PROJECTS) {
-       ctx.beginPath(); ctx.arc(0, 0, p.r, 0, Math.PI * 2); ctx.stroke();
-    }
-
-    // Dibujar Planetas
-    for (const p of PROJECTS) {
-      const isHover = hover === p;
-      const isDragged = drag.active && drag.planet === p;
-      const baseColor = p.color;
-
-      ctx.save();
-      ctx.translate(p.x, p.y);
-
-      // Sombra
-      ctx.shadowColor = 'rgba(26, 22, 18, 0.3)';
-      ctx.shadowBlur = isDragged ? 30 : 15;
-      ctx.shadowOffsetY = isDragged ? 15 : 8;
-
-      // Base volumétrica
-      ctx.beginPath(); ctx.arc(0, 0, p.size, 0, Math.PI * 2);
-      const grad = ctx.createRadialGradient(-p.size*0.3, -p.size*0.3, 0, 0, 0, p.size*1.2);
-      grad.addColorStop(0, adjustColor(baseColor, 50));
-      grad.addColorStop(0.4, baseColor);
-      grad.addColorStop(1, adjustColor(baseColor, -60));
-      ctx.fillStyle = grad; ctx.fill();
-      ctx.shadowColor = 'transparent';
-
-      // Specular Highlight
-      const spec = ctx.createRadialGradient(-p.size*0.4, -p.size*0.4, 0, -p.size*0.4, -p.size*0.4, p.size*0.7);
-      spec.addColorStop(0, 'rgba(255, 255, 255, 0.55)'); spec.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      ctx.fillStyle = spec; ctx.beginPath(); ctx.arc(0, 0, p.size, 0, Math.PI * 2); ctx.fill();
-
-      // Rim Light
-      const rim = ctx.createRadialGradient(0, p.size*0.9, p.size*0.2, 0, 0, p.size);
-      rim.addColorStop(0, 'rgba(255, 255, 255, 0.3)'); rim.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      ctx.fillStyle = rim; ctx.beginPath(); ctx.arc(0, 0, p.size, 0, Math.PI * 2); ctx.fill();
-
-      if (isHover || isDragged) {
-        ctx.strokeStyle = adjustColor(baseColor, 40); ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(0, 0, p.size + 8, 0, Math.PI * 2); ctx.stroke();
-      }
-
-      if (p.id === 'terminal') {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; ctx.font = `600 ${p.size * 0.7}px "DM Mono"`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('>', 2, 2);
-      }
-      ctx.restore();
-    }
-    ctx.restore();
-  }
-
-  // --- UI Y BUCLE PRINCIPAL ---
-  let lastT = performance.now(), frame = 0, fpsAcc = 0, fpsCount = 0;
-  var globalDt = 0.016;
-
-  function tick(now) {
-    const dt = Math.min(0.05, (now - lastT) / 1000);
-    lastT = now; globalDt = dt; frame++;
-
-    if (frame % 10 === 0) { fpsEl.textContent = Math.round(1/dt); }
-
-    const bgGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H));
-    bgGrad.addColorStop(0, '#faf7f1'); bgGrad.addColorStop(1, '#ede8de');
-    ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, W, H);
-
-    updatePhysics(dt);
-    drawWorld(now / 1000);
-
-    // Actualizar Hover UI
-    hover = mouse.has ? hitTest(mouse.wx, mouse.wy) : null;
-    if (hover && !drag.active) {
-      const sc = toScreen(hover.x, hover.y);
+    // Lógica del hover de UI
+    if (hoveredPlanet) {
       labelEl.classList.add('show');
-      labelEl.style.left = sc.x + 'px';
-      labelEl.style.top = (sc.y - hover.size * camera.zoom) + 'px';
-      document.getElementById('label-name').textContent = hover.name;
+      labelEl.style.left = e.clientX + 'px';
+      labelEl.style.top = e.clientY + 'px';
+      document.getElementById('label-name').textContent = hoveredPlanet.userData.name;
+      document.getElementById('label-tag').textContent = hoveredPlanet.userData.tag;
+      document.body.style.cursor = 'pointer';
     } else {
       labelEl.classList.remove('show');
+      document.body.style.cursor = 'default';
+    }
+  });
+
+  // 5. NAVEGACIÓN 3D (Scroll de profundidad)
+  window.addEventListener('wheel', (e) => {
+    // Ajustar objetivo Z según el scroll (viajar hacia adelante/atrás)
+    targetCamZ += e.deltaY * 0.3;
+    // Limitar cuán cerca y cuán lejos podemos ir (El sol está en Z=0)
+    targetCamZ = Math.max(10, Math.min(targetCamZ, 400));
+    document.getElementById('coord').textContent = `[ Z: ${Math.round(targetCamZ)} ]`;
+  });
+
+  // 6. CLIC Y UI
+  window.addEventListener('click', () => {
+    if (hoveredPlanet) {
+      document.getElementById('pv-title').textContent = hoveredPlanet.userData.name;
+      document.getElementById('backdrop').classList.add('show');
+      document.getElementById('preview').classList.add('show');
+    }
+  });
+
+  document.getElementById('pv-close').addEventListener('click', () => {
+    document.getElementById('backdrop').classList.remove('show');
+    document.getElementById('preview').classList.remove('show');
+  });
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // 7. BUCLE DE ANIMACIÓN
+  function animate() {
+    requestAnimationFrame(animate);
+
+    // Suavizado del movimiento de la cámara (Interpolación Lineal)
+    camera.position.z += (targetCamZ - camera.position.z) * 0.08;
+    camera.lookAt(0, 0, 0); // Mirar siempre al centro
+
+    // Órbitas de los planetas
+    planets.forEach(planet => {
+      const data = planet.userData;
+      data.angle += data.speed;
+      // Rotar los planetas en el plano XZ
+      planet.position.x = Math.cos(data.angle) * data.orbit;
+      planet.position.z = Math.sin(data.angle) * data.orbit;
+      
+      // Hacer que el propio planeta gire sobre su eje
+      planet.rotation.y += 0.01;
+      planet.rotation.x += 0.005;
+    });
+
+    // Detectar intersecciones del ratón con los planetas
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(planets);
+    
+    if (intersects.length > 0) {
+      if (hoveredPlanet !== intersects[0].object) {
+        hoveredPlanet = intersects[0].object;
+      }
+    } else {
+      hoveredPlanet = null;
     }
 
-    // Actualizar Coordenadas
-    if(frame % 5 === 0) {
-       coordEl.textContent = `[ Z: ${camera.zoom.toFixed(2)} | X: ${mouse.wx.toFixed(0).padStart(4,'0')}, Y: ${mouse.wy.toFixed(0).padStart(4,'0')} ]`;
-    }
-
-    requestAnimationFrame(tick);
+    renderer.render(scene, camera);
   }
 
-  // Modals simples para evitar romper tu HTML
-  function onPlanetClick(p) {
-    if(p.special) openTerminal();
-    else openPreview(p);
-  }
-  
-  function openPreview(p) {
-    document.getElementById('pv-title').textContent = p.name;
-    document.getElementById('pv-role').textContent = p.role;
-    backdrop.classList.add('show'); preview.classList.add('show');
-  }
-  
-  function openTerminal() {
-    backdrop.classList.add('show'); termEl.classList.add('show');
-  }
-  
-  document.getElementById('pv-close').onclick = document.getElementById('pv-cancel').onclick = () => { backdrop.classList.remove('show'); preview.classList.remove('show'); };
-  document.getElementById('term-close').onclick = () => { backdrop.classList.remove('show'); termEl.classList.remove('show'); };
-
-  resize();
-  requestAnimationFrame(tick);
+  animate();
 })();
 </script>
 </body>
