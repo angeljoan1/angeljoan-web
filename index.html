@@ -1,0 +1,1372 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ajota.system</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:          #f5f0e8;
+    --bg-soft:     #ede8de;
+    --bg-card:     rgba(250,247,241,0.92);
+    --ink:         #1a1612;
+    --ink-dim:     #6b6157;
+    --ink-faint:   #c8bfb0;
+    --accent:      #c17f4a;       /* terracota warm */
+    --accent-soft: #d9a472;
+    --accent-deep: #8f5a2c;
+    --sage:        #7a9e7e;       /* sage green */
+    --dusty:       #7b8fa8;       /* dusty blue */
+    --mauve:       #a07898;       /* mauve */
+    --graphite:    #4a5568;       /* grafito */
+    --magenta:     #c94f8a;       /* LeBlanc — más suave */
+    --magenta-soft:#e08ab5;
+
+    --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "DM Mono", ui-monospace, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: var(--font-sans); overflow: hidden; }
+  body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; cursor: none; }
+
+  /* ---------------- canvas ---------------- */
+  canvas#world { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
+
+  /* ---------------- custom cursor ---------------- */
+  #cursor {
+    position: fixed; top: 0; left: 0; width: 20px; height: 20px;
+    border: 1.5px solid var(--accent); border-radius: 50%;
+    transform: translate(-50%,-50%); pointer-events: none; z-index: 80;
+    transition: width .18s ease, height .18s ease, border-color .18s ease, background-color .18s ease;
+    mix-blend-mode: multiply;
+  }
+  #cursor::after {
+    content: ""; position: absolute; inset: 0; margin: auto; width: 3px; height: 3px;
+    background: var(--accent); border-radius: 50%;
+  }
+  #cursor.hover { width: 40px; height: 40px; border-color: var(--ink); }
+  #cursor.hover::after { background: var(--ink); }
+  #cursor.down { width: 12px; height: 12px; background: rgba(193,127,74,.15); }
+  #cursor.dragging { width: 34px; height: 34px; border-color: var(--accent); border-width: 2px; background: rgba(193,127,74,0.08); }
+
+  /* ---------------- HUD ---------------- */
+  .hud { position: fixed; z-index: 10; color: var(--ink-dim); font-size: 11px; letter-spacing: .10em; text-transform: uppercase; font-weight: 500; user-select: none; }
+  .hud b { color: var(--ink); font-weight: 600; }
+  .hud .dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin-right: 8px; vertical-align: middle; animation: pulse 2.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: .4; } 50% { opacity: 1; } }
+
+  #hud-tl { top: 22px; left: 28px; }
+  #hud-tl .name { display: flex; align-items: center; gap: 10px; }
+  #hud-tl .sub { margin-top: 6px; color: var(--ink-faint); font-size: 10px; }
+
+  #hud-tr { top: 22px; right: 28px; text-align: right; }
+  #hud-tr .row { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+  #hud-tr .coord { font-family: var(--font-mono); font-size: 10px; color: var(--ink-dim); letter-spacing: .08em; text-transform: none; }
+
+  #hud-bl { bottom: 22px; left: 28px; max-width: 320px; line-height: 1.7; }
+  #hud-bl kbd {
+    display: inline-block; font-family: var(--font-mono); font-size: 10px;
+    border: 1px solid var(--ink-faint); padding: 2px 6px; border-radius: 3px;
+    color: var(--ink); margin: 0 2px; background: rgba(255,255,255,.02);
+  }
+
+  #hud-br { bottom: 22px; right: 28px; text-align: right; font-family: var(--font-mono); font-size: 10px; text-transform: none; letter-spacing: .04em; color: var(--ink-faint); }
+  #hud-br .fps { color: var(--ink-dim); }
+
+  /* ---------------- planet label (floating) ---------------- */
+  #label {
+    position: fixed; z-index: 9; pointer-events: none; opacity: 0;
+    transform: translate(-50%, calc(-100% - 14px));
+    transition: opacity .15s ease;
+    font-family: var(--font-mono); font-size: 10px; color: var(--ink);
+    letter-spacing: .10em; text-transform: uppercase;
+    white-space: nowrap;
+  }
+  #label .tag { display: block; color: var(--accent); font-size: 9px; margin-bottom: 3px; opacity: .9; }
+  #label.show { opacity: 1; }
+
+  /* ---------------- preview card ---------------- */
+  #preview {
+    position: fixed; z-index: 30; left: 50%; top: 50%;
+    transform: translate(-50%, -50%) scale(.96);
+    width: min(440px, calc(100vw - 48px));
+    background: var(--bg-card); backdrop-filter: blur(20px) saturate(120%); -webkit-backdrop-filter: blur(20px) saturate(120%);
+    border: 1px solid var(--ink-faint); border-radius: 12px;
+    padding: 28px 28px 24px; opacity: 0; pointer-events: none;
+    transition: opacity .22s ease, transform .22s cubic-bezier(.2,.7,.2,1);
+    box-shadow: 0 2px 0 rgba(255,255,255,.8) inset, 0 20px 60px rgba(26,22,18,.12);
+  }
+  #preview.show { opacity: 1; transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
+  #preview .top { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; font-family: var(--font-mono); font-size: 10px; color: var(--ink-dim); letter-spacing: .10em; text-transform: uppercase; }
+  #preview .top .planet-dot { width: 10px; height: 10px; border-radius: 50%; }
+  #preview .top .close { margin-left: auto; cursor: pointer; color: var(--ink-dim); border: 1px solid var(--ink-faint); width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; transition: all .15s; }
+  #preview .top .close:hover { color: var(--ink); border-color: var(--ink-dim); }
+  #preview h2 { margin: 0 0 6px; font-size: 30px; font-weight: 600; letter-spacing: -.02em; line-height: 1.1; color: var(--ink); }
+  #preview .role { font-family: var(--font-mono); font-size: 10px; color: var(--accent); letter-spacing: .10em; text-transform: uppercase; margin-bottom: 18px; }
+  #preview p { margin: 0 0 22px; color: var(--ink-dim); font-size: 14px; line-height: 1.65; }
+  #preview p b { color: var(--ink); font-weight: 500; }
+  #preview .meta { display: flex; gap: 18px; margin-bottom: 24px; padding: 14px 0; border-top: 1px solid var(--ink-faint); border-bottom: 1px solid var(--ink-faint); }
+  #preview .meta .cell { flex: 1; }
+  #preview .meta .k { font-family: var(--font-mono); font-size: 9px; color: var(--ink-dim); letter-spacing: .14em; text-transform: uppercase; margin-bottom: 4px; }
+  #preview .meta .v { font-size: 13px; color: var(--ink); font-weight: 500; }
+  #preview .actions { display: flex; gap: 10px; }
+  #preview a, #preview button.ghost {
+    flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 11px 16px; text-decoration: none; font-family: var(--font-mono); font-size: 11px;
+    letter-spacing: .10em; text-transform: uppercase; cursor: pointer; border-radius: 8px;
+    transition: all .15s ease;
+  }
+  #preview a.primary { background: var(--ink); color: var(--bg); border: 1px solid var(--ink); font-weight: 600; }
+  #preview a.primary:hover { background: var(--accent); border-color: var(--accent); box-shadow: 0 4px 16px rgba(193,127,74,.3); }
+  #preview button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--ink-faint); }
+  #preview button.ghost:hover { border-color: var(--ink-dim); }
+  #preview .arrow { transition: transform .15s ease; }
+  #preview a.primary:hover .arrow { transform: translateX(3px); }
+
+  /* ---------------- backdrop ---------------- */
+  #backdrop {
+    position: fixed; inset: 0; z-index: 20;
+    background: rgba(245,240,232,0.6);
+    backdrop-filter: blur(4px);
+    opacity: 0; pointer-events: none; transition: opacity .22s ease;
+  }
+  #backdrop.show { opacity: 1; pointer-events: auto; }
+
+  /* ---------------- terminal ---------------- */
+  #terminal {
+    position: fixed; z-index: 40; left: 50%; top: 50%;
+    transform: translate(-50%, -50%) scale(.96);
+    width: min(720px, calc(100vw - 48px));
+    height: min(540px, calc(100vh - 48px));
+    background: #1a1612; backdrop-filter: blur(20px);
+    border: 1px solid rgba(193,127,74,.25); border-radius: 12px;
+    display: flex; flex-direction: column; opacity: 0; pointer-events: none;
+    transition: opacity .25s ease, transform .25s cubic-bezier(.2,.7,.2,1);
+    box-shadow: 0 40px 100px rgba(26,22,18,.35);
+    font-family: var(--font-mono);
+  }
+  #terminal.show { opacity: 1; transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
+  #terminal .titlebar {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+    border-bottom: 1px solid rgba(193,127,74,.15); color: rgba(245,240,232,.4);
+    font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+  }
+  #terminal .titlebar .light { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  #terminal .titlebar .path { color: rgba(245,240,232,.8); }
+  #terminal .titlebar .close { margin-left: auto; cursor: pointer; padding: 4px 8px; border: 1px solid rgba(245,240,232,.15); border-radius: 4px; transition: all .15s; color: rgba(245,240,232,.4); }
+  #terminal .titlebar .close:hover { color: rgba(245,240,232,.9); border-color: var(--accent); }
+
+  #term-output {
+    flex: 1; overflow-y: auto; padding: 18px 22px 8px;
+    font-size: 13px; line-height: 1.7; color: rgba(245,240,232,.9);
+    scrollbar-width: thin; scrollbar-color: rgba(193,127,74,.3) transparent;
+  }
+  #term-output::-webkit-scrollbar { width: 6px; }
+  #term-output::-webkit-scrollbar-thumb { background: rgba(193,127,74,.3); border-radius: 4px; }
+
+  .t-line { white-space: pre-wrap; word-break: break-word; }
+  .t-prompt { color: var(--accent); }
+  .t-user { color: rgba(245,240,232,.9); }
+  .t-dim { color: rgba(245,240,232,.4); }
+  .t-cyan { color: var(--accent-soft); }
+  .t-magenta { color: var(--magenta); }
+  .t-warn { color: #ffd166; }
+  .t-err { color: #ff6b8a; }
+  .t-link { color: var(--cyan); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  .t-link:hover { color: var(--cyan-soft); }
+  .t-caret { display: inline-block; width: 8px; height: 14px; background: var(--cyan); transform: translateY(2px); margin-left: 2px; animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  #term-input-row {
+    display: flex; align-items: center; gap: 10px; padding: 12px 22px 16px;
+    border-top: 1px solid rgba(0,229,255,.12);
+  }
+  #term-input-row .prompt { color: var(--cyan); font-size: 13px; }
+  #term-input {
+    flex: 1; background: transparent; border: 0; outline: 0; color: var(--ink);
+    font-family: var(--font-mono); font-size: 13px; caret-color: var(--cyan); padding: 0;
+  }
+  #term-input:disabled { color: var(--ink-dim); }
+
+  /* ---------------- LeBlanc overlay ---------------- */
+  #leblanc {
+    position: fixed; inset: 0; z-index: 60; pointer-events: none;
+    opacity: 0; transition: opacity .25s ease;
+    background: radial-gradient(circle at center, rgba(201,79,138,.08), rgba(245,240,232,0) 60%);
+  }
+  #leblanc.show { opacity: 1; }
+  #leblanc .glitch {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .3em; text-transform: uppercase;
+    color: var(--magenta); text-shadow: 0 0 12px rgba(201,79,138,.4);
+    opacity: 0; transition: opacity .2s ease;
+  }
+  #leblanc.show .glitch { opacity: 1; }
+
+  /* ---------------- intro ---------------- */
+  #intro {
+    position: fixed; inset: 0; z-index: 70; background: var(--bg);
+    display: grid; place-items: center; transition: opacity .6s ease;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .15em;
+    text-transform: uppercase; color: var(--ink-dim);
+  }
+  #intro.gone { opacity: 0; pointer-events: none; }
+  #intro .boot { text-align: center; }
+  #intro .boot b { display: block; color: var(--accent); margin-bottom: 14px; font-weight: 500; }
+  #intro .bar { width: 220px; height: 1px; background: var(--ink-faint); margin: 18px auto 0; overflow: hidden; }
+  #intro .bar i { display: block; height: 100%; background: var(--accent); width: 0; animation: load 1.3s ease forwards; }
+  @keyframes load { to { width: 100%; } }
+
+  #term-input-row {
+    display: flex; align-items: center; gap: 10px; padding: 12px 22px 16px;
+    border-top: 1px solid rgba(193,127,74,.15);
+  }
+  #term-input-row .prompt { color: var(--accent); font-size: 13px; }
+  #term-input {
+    flex: 1; background: transparent; border: 0; outline: 0; color: rgba(245,240,232,.9);
+    font-family: var(--font-mono); font-size: 13px; caret-color: var(--accent); padding: 0;
+  }
+  #term-input:disabled { color: rgba(245,240,232,.3); }
+
+  @media (max-width: 640px) {
+    body { cursor: auto; }
+    #cursor { display: none; }
+    #hud-tl, #hud-tr, #hud-bl, #hud-br { font-size: 10px; }
+    #hud-tl { top: 16px; left: 18px; }
+    #hud-tr { top: 16px; right: 18px; }
+    #hud-bl { bottom: 16px; left: 18px; max-width: 240px; }
+    #hud-br { bottom: 16px; right: 18px; }
+    #preview h2 { font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="world"></canvas>
+
+<div id="cursor"></div>
+
+<aside id="hud-tl" class="hud">
+  <div class="name"><span class="dot"></span><b>ajota.system</b></div>
+  <div class="sub">v.1.0 · interactive portfolio</div>
+</aside>
+
+<aside id="hud-tr" class="hud">
+  <div class="row"><span class="coord" id="coord">[ 0000.00, 0000.00 ]</span></div>
+  <div class="row" style="margin-top:6px"><span>online</span><span class="dot"></span></div>
+</aside>
+
+<aside id="hud-bl" class="hud">
+  <div>mueve el cursor · empuja los planetas</div>
+  <div><kbd>click</kbd> abrir · <kbd>T</kbd> terminal · <kbd>esc</kbd> cerrar</div>
+</aside>
+
+<aside id="hud-br" class="hud">
+  <div class="fps"><span id="fps">60</span> fps</div>
+  <div>made in madrid</div>
+</aside>
+
+<div id="label"><span class="tag" id="label-tag">// project</span><span id="label-name">name</span></div>
+
+<div id="backdrop"></div>
+
+<section id="preview" role="dialog" aria-modal="true">
+  <div class="top">
+    <span class="planet-dot" id="pv-dot"></span>
+    <span id="pv-tag">// project · 01</span>
+    <span class="close" id="pv-close">×</span>
+  </div>
+  <h2 id="pv-title">GastOS</h2>
+  <div class="role" id="pv-role">personal finance os</div>
+  <p id="pv-desc">descripción</p>
+  <div class="meta">
+    <div class="cell"><div class="k">stack</div><div class="v" id="pv-stack">—</div></div>
+    <div class="cell"><div class="k">status</div><div class="v" id="pv-status">—</div></div>
+    <div class="cell"><div class="k">year</div><div class="v" id="pv-year">—</div></div>
+  </div>
+  <div class="actions">
+    <a id="pv-link" href="#" target="_blank" rel="noopener" class="primary">
+      visitar <span class="arrow">→</span>
+    </a>
+    <button class="ghost" id="pv-cancel">volver</button>
+  </div>
+</section>
+
+<section id="terminal" role="dialog" aria-modal="true">
+  <header class="titlebar">
+    <span class="light"></span>
+    <span>ajota@system</span>
+    <span style="color:var(--ink-faint)">:</span>
+    <span class="path">~/orbit</span>
+    <span class="close" id="term-close">close · esc</span>
+  </header>
+  <div id="term-output"></div>
+  <div id="term-input-row">
+    <span class="prompt">ajota@system:~$</span>
+    <input id="term-input" type="text" autocomplete="off" spellcheck="false" autocapitalize="off">
+  </div>
+</section>
+
+<div id="leblanc"><div class="glitch" id="lb-text">MIRAGE&nbsp;//&nbsp;ENGAGED</div></div>
+
+<div id="intro"><div class="boot"><b>booting ajota.system</b><span id="boot-msg">initializing orbital field…</span><div class="bar"><i></i></div></div></div>
+
+<script>
+/* ===================================================================
+   AJOTA.SYSTEM  —  single-file interactive portfolio
+   =================================================================== */
+(() => {
+  'use strict';
+
+  // ---------- DOM ----------
+  const canvas = document.getElementById('world');
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const cursorEl = document.getElementById('cursor');
+  const labelEl = document.getElementById('label');
+  const labelTag = document.getElementById('label-tag');
+  const labelName = document.getElementById('label-name');
+  const coordEl = document.getElementById('coord');
+  const fpsEl = document.getElementById('fps');
+  const backdrop = document.getElementById('backdrop');
+  const preview = document.getElementById('preview');
+  const intro = document.getElementById('intro');
+  const bootMsg = document.getElementById('boot-msg');
+
+  // ---------- viewport ----------
+  let W = 0, H = 0, cx = 0, cy = 0, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cx = W / 2; cy = H / 2;
+    layoutPlanets();
+  }
+  window.addEventListener('resize', resize);
+
+  // ---------- mouse ----------
+  const mouse = { x: -9999, y: -9999, px: -9999, py: -9999, vx: 0, vy: 0, down: false, has: false };
+  const drag = { planet: null, active: false, startX: 0, startY: 0, startTime: 0, velX: 0, velY: 0, prevX: 0, prevY: 0, prevTime: 0 };
+
+  window.addEventListener('mousemove', e => {
+    mouse.px = mouse.x; mouse.py = mouse.y;
+    mouse.x = e.clientX; mouse.y = e.clientY; mouse.has = true;
+    cursorEl.style.transform = `translate(${e.clientX}px, ${e.clientY}px) translate(-50%,-50%)`;
+    if (drag.active && drag.planet) {
+      const now = performance.now();
+      const dt = (now - drag.prevTime) / 1000;
+      if (dt > 0.005) {
+        drag.velX = (e.clientX - drag.prevX) / dt;
+        drag.velY = (e.clientY - drag.prevY) / dt;
+        drag.prevX = e.clientX; drag.prevY = e.clientY; drag.prevTime = now;
+      }
+      drag.planet.x = e.clientX; drag.planet.y = e.clientY;
+      drag.planet.vx = 0; drag.planet.vy = 0;
+    }
+  });
+  window.addEventListener('mouseleave', () => { mouse.has = false; mouse.x = -9999; mouse.y = -9999; });
+  window.addEventListener('mousedown', () => { mouse.down = true; cursorEl.classList.add('down'); });
+  window.addEventListener('mouseup', () => { mouse.down = false; cursorEl.classList.remove('down'); });
+
+  // touch handled by drag+throw system below
+
+  // ---------- particle dust ----------
+  const PARTICLE_COUNT = 220;
+  const particles = [];
+  function initParticles() {
+    particles.length = 0;
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      particles.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        z: Math.random() * .8 + .2,       // depth (size/brightness multiplier)
+        vx: (Math.random() - .5) * 4,
+        vy: (Math.random() - .5) * 4,
+        tw: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+
+  function updateParticles(dt) {
+    for (const p of particles) {
+      // cursor influence: very gentle attraction toward cursor for closer dust, repulsion for very close
+      if (mouse.has) {
+        const dx = mouse.x - p.x, dy = mouse.y - p.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < 22500) { // 150px
+          const d = Math.sqrt(d2) + 0.001;
+          const k = (1 - d / 150) * 30 * p.z;
+          p.vx -= (dx / d) * k * dt;
+          p.vy -= (dy / d) * k * dt;
+        }
+      }
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vx *= 0.985; p.vy *= 0.985;
+      // wrap
+      if (p.x < -10) p.x = W + 10; else if (p.x > W + 10) p.x = -10;
+      if (p.y < -10) p.y = H + 10; else if (p.y > H + 10) p.y = -10;
+      p.tw += dt * (1 + p.z);
+    }
+  }
+
+  function drawParticles() {
+    for (const p of particles) {
+      const alpha = (0.06 + Math.sin(p.tw) * 0.04) * p.z;
+      const r = p.z * 1.0;
+      ctx.fillStyle = `rgba(193,127,74,${alpha.toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // ---------- planets / data ----------
+  const PROJECTS = [
+    {
+      id: 'gastos', name: 'GastOS', tag: '// project · 01',
+      role: 'personal finance os', size: 13, color: '#c17f4a',
+      orbit: 0.20, speed: 0.16, phase: 0.8,
+      desc: 'Sistema operativo personal para entender en qué se va el dinero. <b>Categorías inteligentes</b>, presupuestos elásticos y un panel que se lee como un dashboard de astronave.',
+      stack: 'Next.js · TypeScript · Node', status: 'beta', year: '2025',
+      link: 'https://example.com/gastos'
+    },
+    {
+      id: 'github', name: 'GitHub', tag: '// repo · 02',
+      role: 'open source · commits', size: 11, color: '#4a5568',
+      orbit: 0.28, speed: 0.13, phase: 2.1,
+      desc: 'Donde vive el código que no rompe nada (todavía). <b>Repositorios públicos</b>, experimentos, scripts y librerías que uso cada día.',
+      stack: 'TypeScript · Java · Python', status: 'active', year: '—',
+      link: 'https://github.com/angeljoan1'
+    },
+    {
+      id: 'tfg', name: 'TFG', tag: '// research · 03',
+      role: 'self-sovereign identity', size: 16, color: '#7b8fa8',
+      orbit: 0.36, speed: 0.10, phase: 4.0,
+      desc: 'Trabajo Fin de Grado en ingeniería telemática. <b>Identidad descentralizada</b> con credenciales verificables, DIDs y un wallet que no pide permiso a nadie.',
+      stack: 'DIDs · VC · Solidity', status: 'defendido', year: '2025',
+      link: 'https://example.com/tfg'
+    },
+    {
+      id: 'gaming', name: 'Stats', tag: '// gaming · 04',
+      role: 'rift telemetry', size: 10, color: '#7a9e7e',
+      orbit: 0.44, speed: 0.08, phase: 5.5,
+      desc: 'Estadísticas en vivo desde la Grieta del Invocador. <b>Mid lane main</b>, mage enjoyer, perpetuamente intentando subir un peldaño más.',
+      stack: 'Riot API · Next.js', status: 'in-game', year: 'always',
+      link: 'https://example.com/gaming'
+    },
+    {
+      id: 'terminal', name: 'Terminal', tag: '// secret · 05',
+      role: 'sudo required', size: 14, color: '#a07898',
+      orbit: 0.52, speed: 0.06, phase: 0.2,
+      special: true,
+      desc: 'una terminal. escribe <b>help</b>.',
+      stack: 'sh · cli', status: 'unlocked', year: '∞',
+      link: null
+    },
+  ];
+
+  function layoutPlanets() {
+    const m = Math.min(W, H);
+    for (const p of PROJECTS) {
+      p.r = p.orbit * m;          // orbital radius
+      // first time: place on orbit
+      if (p.x === undefined) {
+        p.angle = p.phase;
+        p.x = cx + p.r * Math.cos(p.angle);
+        p.y = cy + p.r * Math.sin(p.angle);
+        p.vx = 0; p.vy = 0;
+      }
+    }
+  }
+
+  layoutPlanets();
+
+  const SPRING_K  = 3.5;
+  const MAX_SPEED = 2200;
+
+  function updatePlanets(dt) {
+    for (const p of PROJECTS) {
+      if (drag.active && drag.planet === p) {
+        p.angle = Math.atan2(p.y - cy, p.x - cx);
+        continue;
+      }
+      p.angle += p.speed * dt;
+      const tx = cx + p.r * Math.cos(p.angle);
+      const ty = cy + p.r * Math.sin(p.angle);
+      let fx = (tx - p.x) * SPRING_K;
+      let fy = (ty - p.y) * SPRING_K;
+      for (const q of PROJECTS) {
+        if (q === p || (drag.active && drag.planet === q)) continue;
+        const ddx = p.x - q.x, ddy = p.y - q.y;
+        const d2 = ddx * ddx + ddy * ddy;
+        const minD = p.size + q.size + 14;
+        if (d2 < minD * minD && d2 > 0.01) {
+          const d = Math.sqrt(d2);
+          fx += (ddx / d) * (1 - d / minD) * 600;
+          fy += (ddy / d) * (1 - d / minD) * 600;
+        }
+      }
+      const massInv = 1 / (0.6 + p.size * 0.07);
+      p.vx += fx * massInv * dt;
+      p.vy += fy * massInv * dt;
+      const distFromOrbit = Math.hypot(p.x - tx, p.y - ty);
+      const damp = distFromOrbit > 80 ? Math.pow(0.04, dt) : Math.pow(0.12, dt);
+      p.vx *= damp; p.vy *= damp;
+      const sp = Math.hypot(p.vx, p.vy);
+      if (sp > MAX_SPEED) { p.vx = p.vx / sp * MAX_SPEED; p.vy = p.vy / sp * MAX_SPEED; }
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+    }
+  }
+
+  // ---------- drawing ----------
+  function drawOrbits() {
+    for (const p of PROJECTS) {
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, p.r, 0, Math.PI * 2);
+      if (p.special) {
+        ctx.strokeStyle = 'rgba(160,120,152,0.18)';
+        ctx.setLineDash([2, 8]);
+      } else {
+        ctx.strokeStyle = 'rgba(26,22,18,0.07)';
+        ctx.setLineDash([]);
+      }
+      ctx.stroke();
+      if (!p.special) {
+        const tickA = p.angle;
+        const r0 = p.r - 3, r1 = p.r + 3;
+        ctx.strokeStyle = 'rgba(26,22,18,0.18)';
+        ctx.lineWidth = 1; ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(tickA) * r0, cy + Math.sin(tickA) * r0);
+        ctx.lineTo(cx + Math.cos(tickA) * r1, cy + Math.sin(tickA) * r1);
+        ctx.stroke();
+      }
+    }
+    ctx.setLineDash([]);
+  }
+
+  function drawSun(t) {
+    // soft warm aura layers
+    for (let i = 3; i >= 0; i--) {
+      const pulseR = 62 + i * 18 + Math.sin(t * 1.1 + i * 0.8) * (3 + i);
+      const alpha = (0.04 - i * 0.008) + Math.sin(t * 1.4 + i) * 0.008;
+      const grad = ctx.createRadialGradient(cx, cy, pulseR * 0.3, cx, cy, pulseR);
+      grad.addColorStop(0, `rgba(193,127,74,${alpha * 4})`);
+      grad.addColorStop(0.5, `rgba(193,127,74,${alpha})`);
+      grad.addColorStop(1, 'rgba(193,127,74,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(cx, cy, pulseR, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // spinning tick marks
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(t * 0.15);
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2;
+      const r1 = 44 + (i % 6 === 0 ? 0 : 3);
+      const r2 = 50 + (i % 6 === 0 ? 4 : 0);
+      const alpha = i % 6 === 0 ? 0.5 : 0.18;
+      ctx.strokeStyle = `rgba(193,127,74,${alpha})`;
+      ctx.lineWidth = i % 6 === 0 ? 1.5 : 0.7;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
+      ctx.lineTo(Math.cos(a) * r2, Math.sin(a) * r2);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // outer ring
+    ctx.strokeStyle = 'rgba(193,127,74,0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, 40, 0, Math.PI * 2); ctx.stroke();
+
+    // inner disc — warm ivory
+    const disc = ctx.createRadialGradient(cx - 7, cy - 7, 0, cx, cy, 36);
+    disc.addColorStop(0, 'rgba(255,252,245,1)');
+    disc.addColorStop(0.4, 'rgba(245,230,210,0.98)');
+    disc.addColorStop(0.75, 'rgba(217,164,114,0.7)');
+    disc.addColorStop(1, 'rgba(193,127,74,0.2)');
+    ctx.fillStyle = disc;
+    ctx.beginPath(); ctx.arc(cx, cy, 36, 0, Math.PI * 2); ctx.fill();
+
+    // subtle inner ring
+    ctx.strokeStyle = 'rgba(193,127,74,0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, 28 + Math.sin(t * 2) * 1, 0, Math.PI * 2); ctx.stroke();
+
+    // name
+    ctx.save();
+    ctx.fillStyle = '#5a3a1a';
+    ctx.font = '600 15px "Outfit", sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('ajota', cx, cy + 1);
+    ctx.restore();
+  }
+
+  // planet textures for editorial palette
+  const planetTextures = new Map();
+  function getPlanetTexture(p) {
+    if (planetTextures.has(p.id)) return planetTextures.get(p.id);
+    const sz = p.size * 2 + 4;
+    const oc = document.createElement('canvas');
+    oc.width = sz * 2; oc.height = sz * 2;
+    const octx = oc.getContext('2d');
+    const r = p.size;
+    const cx2 = sz, cy2 = sz;
+
+    if (p.id === 'gastos') {
+      // terracota cálido con grid financiero
+      const g = octx.createRadialGradient(cx2 - r * 0.3, cy2 - r * 0.3, 0, cx2, cy2, r);
+      g.addColorStop(0, '#e8a870'); g.addColorStop(0.5, '#c17f4a'); g.addColorStop(1, '#8f5a2c');
+      octx.fillStyle = g; octx.beginPath(); octx.arc(cx2, cy2, r, 0, Math.PI * 2); octx.fill();
+      octx.strokeStyle = 'rgba(255,240,220,0.20)'; octx.lineWidth = 0.6;
+      for (let i = -r; i < r; i += r * 0.38) {
+        octx.beginPath(); octx.moveTo(cx2 + i, cy2 - r); octx.lineTo(cx2 + i, cy2 + r); octx.stroke();
+        octx.beginPath(); octx.moveTo(cx2 - r, cy2 + i); octx.lineTo(cx2 + r, cy2 + i); octx.stroke();
+      }
+    } else if (p.id === 'github') {
+      // grafito con spikes
+      const g = octx.createRadialGradient(cx2 - r * 0.25, cy2 - r * 0.25, 0, cx2, cy2, r);
+      g.addColorStop(0, '#7a8898'); g.addColorStop(0.6, '#4a5568'); g.addColorStop(1, '#2d3748');
+      octx.fillStyle = g; octx.beginPath(); octx.arc(cx2, cy2, r, 0, Math.PI * 2); octx.fill();
+      octx.strokeStyle = 'rgba(255,255,255,0.25)'; octx.lineWidth = 0.7;
+      for (let a = 0; a < Math.PI; a += Math.PI / 4) {
+        octx.beginPath();
+        octx.moveTo(cx2 + Math.cos(a) * r * 1.4, cy2 + Math.sin(a) * r * 1.4);
+        octx.lineTo(cx2 - Math.cos(a) * r * 1.4, cy2 - Math.sin(a) * r * 1.4);
+        octx.stroke();
+      }
+    } else if (p.id === 'tfg') {
+      // dusty blue con patrón hex
+      const g = octx.createRadialGradient(cx2 - r * 0.3, cy2 - r * 0.4, 0, cx2, cy2, r);
+      g.addColorStop(0, '#adc0d4'); g.addColorStop(0.4, '#7b8fa8'); g.addColorStop(1, '#4a6080');
+      octx.fillStyle = g; octx.beginPath(); octx.arc(cx2, cy2, r, 0, Math.PI * 2); octx.fill();
+      octx.strokeStyle = 'rgba(255,255,255,0.18)'; octx.lineWidth = 0.7;
+      const hr = r * 0.52;
+      octx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const nx = cx2 + Math.cos(a) * hr, ny = cy2 + Math.sin(a) * hr;
+        if (i === 0) octx.moveTo(nx, ny); else octx.lineTo(nx, ny);
+      }
+      octx.closePath(); octx.stroke();
+    } else if (p.id === 'gaming') {
+      // sage green brillante
+      const g = octx.createRadialGradient(cx2, cy2, 0, cx2, cy2, r);
+      g.addColorStop(0, '#a8c8a8'); g.addColorStop(0.4, '#7a9e7e'); g.addColorStop(1, '#4a7050');
+      octx.fillStyle = g; octx.beginPath(); octx.arc(cx2, cy2, r, 0, Math.PI * 2); octx.fill();
+    } else if (p.id === 'terminal') {
+      // mauve oscuro con scanlines
+      const g = octx.createRadialGradient(cx2 - r * 0.2, cy2 - r * 0.2, 0, cx2, cy2, r);
+      g.addColorStop(0, '#c89ab8'); g.addColorStop(0.5, '#a07898'); g.addColorStop(1, '#6a4868');
+      octx.fillStyle = g; octx.beginPath(); octx.arc(cx2, cy2, r, 0, Math.PI * 2); octx.fill();
+      octx.strokeStyle = 'rgba(0,0,0,0.15)'; octx.lineWidth = 1;
+      for (let i = -r; i < r; i += 3) {
+        octx.beginPath(); octx.moveTo(cx2 - r, cy2 + i); octx.lineTo(cx2 + r, cy2 + i); octx.stroke();
+      }
+    }
+
+    // dark side shadow
+    const shadow = octx.createRadialGradient(cx2 + r * 0.38, cy2 + r * 0.25, 0, cx2 + r * 0.38, cy2 + r * 0.25, r * 1.1);
+    shadow.addColorStop(0, 'rgba(0,0,0,0.45)');
+    shadow.addColorStop(0.6, 'rgba(0,0,0,0.15)');
+    shadow.addColorStop(1, 'rgba(0,0,0,0)');
+    octx.fillStyle = shadow; octx.beginPath(); octx.arc(cx2, cy2, r, 0, Math.PI * 2); octx.fill();
+
+    // specular highlight
+    const spec = octx.createRadialGradient(cx2 - r * 0.35, cy2 - r * 0.35, 0, cx2 - r * 0.35, cy2 - r * 0.35, r * 0.5);
+    spec.addColorStop(0, 'rgba(255,255,255,0.5)');
+    spec.addColorStop(1, 'rgba(255,255,255,0)');
+    octx.fillStyle = spec; octx.beginPath(); octx.arc(cx2, cy2, r, 0, Math.PI * 2); octx.fill();
+
+    planetTextures.set(p.id, oc);
+    return oc;
+  }
+
+  function drawPlanet(p, t) {
+    const isHover = hover === p;
+    const isDragged = drag.active && drag.planet === p;
+    const isLeblancActive = leblanc.active;
+    const color = isLeblancActive ? '#c94f8a' : p.color;
+
+    // soft shadow beneath planet
+    if (!isDragged) {
+      const shadowGrad = ctx.createRadialGradient(p.x + 2, p.y + 4, 0, p.x + 2, p.y + 4, p.size * 2);
+      shadowGrad.addColorStop(0, 'rgba(26,22,18,0.12)');
+      shadowGrad.addColorStop(1, 'rgba(26,22,18,0)');
+      ctx.fillStyle = shadowGrad;
+      ctx.beginPath(); ctx.arc(p.x + 2, p.y + 4, p.size * 2, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // outer glow
+    const glowR = p.size * (isDragged ? 5 : isHover ? 4 : 3);
+    const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowR);
+    glow.addColorStop(0, color + (isDragged ? '50' : isHover ? '38' : '22'));
+    glow.addColorStop(1, color + '00');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(p.x, p.y, glowR, 0, Math.PI * 2); ctx.fill();
+
+    // planet body from texture
+    const tex = getPlanetTexture(p);
+    const sz = p.size * 2 + 4;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.clip();
+    ctx.drawImage(tex, p.x - sz, p.y - sz, sz * 2, sz * 2);
+    ctx.restore();
+
+    // hover/drag ring
+    if (isHover || isDragged) {
+      const ringR = p.size + (isDragged ? 9 : 6) + Math.sin(t * 4) * 1;
+      ctx.strokeStyle = isDragged ? 'rgba(26,22,18,0.7)' : 'rgba(26,22,18,0.5)';
+      ctx.lineWidth = isDragged ? 1.5 : 1;
+      ctx.beginPath(); ctx.arc(p.x, p.y, ringR, 0, Math.PI * 2); ctx.stroke();
+    }
+
+    // terminal cursor blink
+    if (p.id === 'terminal' && !isLeblancActive) {
+      ctx.save();
+      ctx.fillStyle = Math.floor(t * 2) % 2 === 0 ? 'rgba(245,240,232,0.9)' : 'rgba(245,240,232,0)';
+      ctx.font = `bold ${p.size * 0.7}px "DM Mono"`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('>', p.x, p.y + 1);
+      ctx.restore();
+    }
+
+    // label
+    if (!isHover && !isDragged) {
+      ctx.save();
+      ctx.font = '500 9px "DM Mono", monospace';
+      ctx.fillStyle = 'rgba(26,22,18,0.35)';
+      ctx.textAlign = 'center';
+      ctx.fillText(p.name.toLowerCase(), p.x, p.y + p.size + 16);
+      ctx.restore();
+    }
+  }
+
+  // ---------- hit testing ----------
+  let hover = null;
+  function hitTest(x, y) {
+    for (let i = PROJECTS.length - 1; i >= 0; i--) {
+      const p = PROJECTS[i];
+      const dx = x - p.x, dy = y - p.y;
+      if (dx * dx + dy * dy < (p.size + 12) * (p.size + 12)) return p;
+    }
+    return null;
+  }
+
+  function updateHover() {
+    const h = mouse.has ? hitTest(mouse.x, mouse.y) : null;
+    if (h !== hover) {
+      hover = h;
+      if (h) {
+        cursorEl.classList.add('hover');
+        labelTag.textContent = h.tag;
+        labelName.textContent = h.name;
+      } else {
+        cursorEl.classList.remove('hover');
+      }
+    }
+    if (hover) {
+      labelEl.classList.add('show');
+      labelEl.style.left = hover.x + 'px';
+      labelEl.style.top  = hover.y + 'px';
+    } else {
+      labelEl.classList.remove('show');
+    }
+  }
+
+  // ---------- drag + throw + click ----------
+  canvas.addEventListener('mousedown', e => {
+    const hit = hitTest(e.clientX, e.clientY);
+    if (hit) {
+      drag.planet = hit; drag.active = true;
+      drag.startX = e.clientX; drag.startY = e.clientY;
+      drag.startTime = performance.now();
+      drag.velX = 0; drag.velY = 0;
+      drag.prevX = e.clientX; drag.prevY = e.clientY;
+      drag.prevTime = performance.now();
+      hit.vx = 0; hit.vy = 0;
+      cursorEl.classList.add('dragging');
+    }
+  });
+
+  window.addEventListener('mouseup', e => {
+    if (!drag.active || !drag.planet) { drag.active = false; drag.planet = null; return; }
+    const p = drag.planet;
+    const took = performance.now() - drag.startTime;
+    const moved = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY);
+    if (moved < 8 && took < 300) {
+      drag.active = false; drag.planet = null;
+      onPlanetClick(p);
+    } else {
+      p.vx = drag.velX * 0.85; p.vy = drag.velY * 0.85;
+      const sp = Math.hypot(p.vx, p.vy);
+      if (sp > MAX_SPEED) { p.vx = p.vx / sp * MAX_SPEED; p.vy = p.vy / sp * MAX_SPEED; }
+      drag.active = false; drag.planet = null;
+    }
+    cursorEl.classList.remove('down'); cursorEl.classList.remove('dragging');
+  });
+
+  canvas.addEventListener('touchstart', e => {
+    if (!e.touches[0]) return;
+    const t = e.touches[0];
+    const hit = hitTest(t.clientX, t.clientY);
+    if (hit) {
+      drag.planet = hit; drag.active = true;
+      drag.startX = t.clientX; drag.startY = t.clientY;
+      drag.startTime = performance.now();
+      drag.velX = 0; drag.velY = 0;
+      drag.prevX = t.clientX; drag.prevY = t.clientY;
+      drag.prevTime = performance.now();
+      hit.vx = 0; hit.vy = 0;
+      mouse.x = t.clientX; mouse.y = t.clientY; mouse.has = true;
+    }
+  }, { passive: true });
+
+  canvas.addEventListener('touchmove', e => {
+    if (!e.touches[0]) return;
+    const t = e.touches[0];
+    mouse.x = t.clientX; mouse.y = t.clientY; mouse.has = true;
+    if (drag.active && drag.planet) {
+      const now = performance.now();
+      const dtt = (now - drag.prevTime) / 1000;
+      if (dtt > 0.005) {
+        drag.velX = (t.clientX - drag.prevX) / dtt;
+        drag.velY = (t.clientY - drag.prevY) / dtt;
+        drag.prevX = t.clientX; drag.prevY = t.clientY; drag.prevTime = now;
+      }
+      drag.planet.x = t.clientX; drag.planet.y = t.clientY;
+      drag.planet.vx = 0; drag.planet.vy = 0;
+    }
+  }, { passive: true });
+
+  canvas.addEventListener('touchend', e => {
+    if (!drag.active || !drag.planet) { drag.active = false; drag.planet = null; return; }
+    const p = drag.planet;
+    const took = performance.now() - drag.startTime;
+    const lastT = e.changedTouches[0];
+    const moved = lastT ? Math.hypot(lastT.clientX - drag.startX, lastT.clientY - drag.startY) : 999;
+    if (moved < 10 && took < 300) {
+      drag.active = false; drag.planet = null; onPlanetClick(p);
+    } else {
+      p.vx = drag.velX * 0.85; p.vy = drag.velY * 0.85;
+      const sp = Math.hypot(p.vx, p.vy);
+      if (sp > MAX_SPEED) { p.vx = p.vx / sp * MAX_SPEED; p.vy = p.vy / sp * MAX_SPEED; }
+      drag.active = false; drag.planet = null;
+    }
+    mouse.has = false;
+  });
+
+  function onPlanetClick(p) {
+    if (p.special) openTerminal();
+    else openPreview(p);
+  }
+
+  // ---------- preview modal ----------
+  const pvDot = document.getElementById('pv-dot');
+  const pvTag = document.getElementById('pv-tag');
+  const pvTitle = document.getElementById('pv-title');
+  const pvRole = document.getElementById('pv-role');
+  const pvDesc = document.getElementById('pv-desc');
+  const pvStack = document.getElementById('pv-stack');
+  const pvStatus = document.getElementById('pv-status');
+  const pvYear = document.getElementById('pv-year');
+  const pvLink = document.getElementById('pv-link');
+  document.getElementById('pv-close').addEventListener('click', closeAll);
+  document.getElementById('pv-cancel').addEventListener('click', closeAll);
+  backdrop.addEventListener('click', closeAll);
+
+  function openPreview(p) {
+    pvDot.style.background = p.color;
+    pvDot.style.boxShadow = '0 0 12px ' + p.color;
+    pvTag.textContent = p.tag;
+    pvTitle.textContent = p.name;
+    pvRole.textContent = p.role;
+    pvDesc.innerHTML = p.desc;
+    pvStack.textContent = p.stack;
+    pvStatus.textContent = p.status;
+    pvYear.textContent = p.year;
+    pvLink.href = p.link || '#';
+    backdrop.classList.add('show');
+    preview.classList.add('show');
+  }
+
+  function closeAll() {
+    backdrop.classList.remove('show');
+    preview.classList.remove('show');
+    closeTerminal();
+  }
+
+  // ---------- terminal ----------
+  const termEl = document.getElementById('terminal');
+  const termOutput = document.getElementById('term-output');
+  const termInput = document.getElementById('term-input');
+  document.getElementById('term-close').addEventListener('click', () => { closeTerminal(); });
+
+  let termOpen = false, typing = false, history = [], histIdx = 0;
+  let bootedTerm = false;
+
+  function openTerminal() {
+    backdrop.classList.add('show');
+    termEl.classList.add('show');
+    termOpen = true;
+    if (!bootedTerm) {
+      bootedTerm = true;
+      bootTerminal();
+    } else {
+      setTimeout(() => termInput.focus(), 100);
+    }
+  }
+  function closeTerminal() {
+    termEl.classList.remove('show');
+    termOpen = false;
+    if (!preview.classList.contains('show')) backdrop.classList.remove('show');
+  }
+
+  function termPrint(html, cls = '') {
+    const line = document.createElement('div');
+    line.className = 't-line ' + cls;
+    line.innerHTML = html;
+    termOutput.appendChild(line);
+    termOutput.scrollTop = termOutput.scrollHeight;
+    return line;
+  }
+
+  async function typeLine(html, cls = '', speed = 12) {
+    typing = true;
+    termInput.disabled = true;
+    const line = document.createElement('div');
+    line.className = 't-line ' + cls;
+    termOutput.appendChild(line);
+    // strip HTML to get plain text length but render HTML progressively char-by-char
+    // simple approach: split by tags, type out visible chars
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    const target = tmp.innerHTML;
+    let i = 0;
+    while (i <= target.length) {
+      // skip tag chunks instantly
+      if (target[i] === '<') {
+        const end = target.indexOf('>', i);
+        if (end === -1) break;
+        i = end + 1;
+      } else {
+        i++;
+      }
+      line.innerHTML = target.slice(0, i);
+      termOutput.scrollTop = termOutput.scrollHeight;
+      if (target[i - 1] && target[i - 1] !== ' ') await sleep(speed);
+    }
+    typing = false;
+    termInput.disabled = false;
+    setTimeout(() => termInput.focus(), 10);
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  async function bootTerminal() {
+    termOutput.innerHTML = '';
+    await sleep(120);
+    await typeLine('<span class="t-cyan">ajota.terminal</span> <span class="t-dim">v.1.0 · type</span> <span class="t-user">help</span> <span class="t-dim">to begin</span>', '', 8);
+    await typeLine('<span class="t-dim">connected to orbit. ' + new Date().toISOString().slice(0, 19).replace('T', ' ') + ' · 5 nodes</span>', '', 6);
+    termPrint('&nbsp;');
+    termInput.disabled = false;
+    termInput.focus();
+  }
+
+  // command registry
+  const COMMANDS = {
+    help: async () => {
+      await typeLine('<span class="t-dim">available commands:</span>');
+      const rows = [
+        ['help',          'mostrar esta ayuda'],
+        ['whoami',        'about · bio'],
+        ['ls',            'listar planetas/proyectos'],
+        ['open &lt;name&gt;',   'abrir un proyecto (gastos | github | tfg | gaming)'],
+        ['clear',         'limpiar terminal'],
+        ['exit',          'cerrar terminal'],
+        ['<span class="t-dim">…</span>',  '<span class="t-dim">algunos comandos están escondidos</span>'],
+      ];
+      for (const [c, d] of rows) {
+        await typeLine(`  <span class="t-cyan">${c.padEnd(18)}</span>  <span class="t-dim">${d}</span>`, '', 4);
+      }
+    },
+    whoami: async () => {
+      await typeLine('<span class="t-cyan">ajota</span>  <span class="t-dim">·</span>  ingeniero telemático &amp; developer');
+      await typeLine('<span class="t-dim">───────────────────────────────────────</span>', '', 2);
+      await typeLine('  construyo <span class="t-user">software con foco en la red</span> y los sistemas que se sienten vivos.');
+      await typeLine('  identidad descentralizada · OS personales · interfaces que reaccionan.');
+      await typeLine('');
+      await typeLine('  <span class="t-dim">based in</span>  madrid, ES');
+      await typeLine('  <span class="t-dim">stack</span>     typescript · rust · swift · solidity');
+      await typeLine('  <span class="t-dim">status</span>    <span class="t-cyan">online</span>  ·  <span class="t-magenta">idle on the rift</span>');
+      await typeLine('  <span class="t-dim">hint</span>      try <span class="t-user">sudo leblanc</span>');
+    },
+    ls: async () => {
+      await typeLine('<span class="t-dim">total ' + PROJECTS.length + ' planets in orbit</span>');
+      for (const p of PROJECTS) {
+        const id = p.id.padEnd(10);
+        const role = p.role.padEnd(28);
+        const status = p.status;
+        await typeLine(`  <span class="t-cyan">${id}</span> <span class="t-dim">${role}</span> <span class="t-user">${status}</span>`, '', 3);
+      }
+      await typeLine('<span class="t-dim">use </span><span class="t-cyan">open &lt;name&gt;</span><span class="t-dim"> to visit.</span>');
+    },
+    open: async (arg) => {
+      if (!arg) { await typeLine('<span class="t-err">open: missing argument.</span> try <span class="t-cyan">ls</span>'); return; }
+      const map = { gastos: 'gastos', gastOs: 'gastos', github: 'github', git: 'github', tfg: 'tfg', identidad: 'tfg', gaming: 'gaming', stats: 'gaming', league: 'gaming' };
+      const id = map[arg.toLowerCase()] || arg.toLowerCase();
+      const p = PROJECTS.find(x => x.id === id);
+      if (!p) { await typeLine(`<span class="t-err">open: unknown planet '${arg}'</span>`); return; }
+      if (p.special) { await typeLine('<span class="t-warn">you\'re already here.</span>'); return; }
+      await typeLine(`<span class="t-dim">launching</span> <span class="t-cyan">${p.name}</span> <span class="t-dim">…</span>`);
+      await sleep(250);
+      window.open(p.link, '_blank', 'noopener');
+      await typeLine('<span class="t-dim">opened in new tab. orbit window: <a class="t-link" href="' + p.link + '" target="_blank" rel="noopener">' + p.link + '</a></span>', '', 2);
+    },
+    clear: async () => { termOutput.innerHTML = ''; },
+    exit: async () => { await typeLine('<span class="t-dim">disconnecting…</span>'); await sleep(200); closeTerminal(); },
+    echo: async (...args) => { await typeLine(args.join(' ')); },
+    pwd:  async () => { await typeLine('<span class="t-cyan">/home/ajota/orbit</span>'); },
+    date: async () => { await typeLine(new Date().toString()); },
+    cat: async (arg) => {
+      if (!arg) { await typeLine('<span class="t-err">cat: missing operand</span>'); return; }
+      if (arg === 'readme' || arg === 'README' || arg === 'README.md') {
+        await typeLine('<span class="t-cyan"># ajota</span>');
+        await typeLine('');
+        await typeLine('  un portfolio que es un sistema solar.');
+        await typeLine('  empuja los planetas. abre la terminal. pierde el tiempo.');
+        await typeLine('');
+        await typeLine('  <span class="t-dim">— hecho con vanilla js, canvas y obsesión.</span>');
+      } else {
+        await typeLine(`<span class="t-err">cat: ${arg}: no such file</span>`);
+      }
+    },
+    sudo: async (...args) => {
+      const target = (args[0] || '').toLowerCase();
+      if (target === 'leblanc') return COMMANDS.leblanc();
+      if (!args.length) { await typeLine('<span class="t-err">sudo: a password is required</span>'); return; }
+      await typeLine(`<span class="t-warn">[sudo] password for ajota:</span>`);
+      await sleep(400);
+      await typeLine(`<span class="t-err">sudo: ${args.join(' ')}: command not found</span>`);
+    },
+    leblanc: async () => {
+      await typeLine('<span class="t-magenta">[mirage_protocol]</span> <span class="t-dim">authenticating…</span>');
+      await sleep(300);
+      await typeLine('<span class="t-magenta">access granted. distortion online.</span>', '', 6);
+      await sleep(200);
+      runLeblanc();
+    },
+  };
+
+  // command parser
+  function parseCommand(raw) {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    const parts = trimmed.split(/\s+/);
+    const cmd = parts[0].toLowerCase();
+    const args = parts.slice(1);
+    return { cmd, args, raw: trimmed };
+  }
+
+  async function runCommand(raw) {
+    const parsed = parseCommand(raw);
+    if (!parsed) return;
+    // echo the input
+    termPrint(`<span class="t-prompt">ajota@system:~$</span> <span class="t-user">${escapeHtml(parsed.raw)}</span>`);
+    history.push(parsed.raw); histIdx = history.length;
+    const fn = COMMANDS[parsed.cmd];
+    if (fn) {
+      await fn(...parsed.args);
+    } else {
+      await typeLine(`<span class="t-err">${parsed.cmd}: command not found</span>  <span class="t-dim">— try </span><span class="t-cyan">help</span>`);
+    }
+    termPrint('&nbsp;');
+  }
+
+  function escapeHtml(s) { return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+  termInput.addEventListener('keydown', async e => {
+    if (typing) { e.preventDefault(); return; }
+    if (e.key === 'Enter') {
+      const v = termInput.value;
+      termInput.value = '';
+      await runCommand(v);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (history.length && histIdx > 0) { histIdx--; termInput.value = history[histIdx]; }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (histIdx < history.length - 1) { histIdx++; termInput.value = history[histIdx]; }
+      else { histIdx = history.length; termInput.value = ''; }
+    } else if (e.key === 'l' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault(); termOutput.innerHTML = '';
+    }
+  });
+
+  // ---------- LeBlanc easter egg ----------
+  const leblanc = { active: false, t: 0, clones: [], runes: [], chains: [], duration: 6.0 };
+  const leblancEl = document.getElementById('leblanc');
+  const lbText = document.getElementById('lb-text');
+
+  function runLeblanc() {
+    if (leblanc.active) return;
+    leblanc.active = true;
+    leblanc.t = 0;
+    leblanc.clones = [];
+    leblanc.runes = [];
+    leblanc.chains = [];
+    leblancEl.classList.add('show');
+
+    // schedule clone teleports
+    const numClones = 6;
+    for (let i = 0; i < numClones; i++) {
+      const phase = i * 0.7 + 0.2;
+      const ang = Math.random() * Math.PI * 2;
+      const dist = 100 + Math.random() * Math.min(W, H) * 0.32;
+      leblanc.clones.push({
+        x: cx + Math.cos(ang) * dist,
+        y: cy + Math.sin(ang) * dist,
+        born: phase,
+        life: 1.4,
+        size: 30 + Math.random() * 10,
+      });
+    }
+
+    // schedule rune sigils
+    for (let i = 0; i < 16; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const dist = 60 + Math.random() * Math.min(W, H) * 0.4;
+      leblanc.runes.push({
+        x: cx + Math.cos(ang) * dist,
+        y: cy + Math.sin(ang) * dist,
+        born: Math.random() * 4 + 0.5,
+        life: 0.8 + Math.random() * 0.6,
+        size: 8 + Math.random() * 14,
+        rot: Math.random() * Math.PI * 2,
+      });
+    }
+
+    // text glitch sequence
+    const phrases = ['MIRAGE // ENGAGED', 'DISTORTION', 'WHICH ONE IS REAL?', 'NEVER CHASE', 'AJOTA  //  AJOTA  //  AJOTA'];
+    let pi = 0;
+    const txtTick = setInterval(() => {
+      lbText.textContent = phrases[pi++ % phrases.length];
+    }, 700);
+
+    setTimeout(() => {
+      clearInterval(txtTick);
+      leblancEl.classList.remove('show');
+      leblanc.active = false;
+    }, leblanc.duration * 1000);
+  }
+
+  function drawLeblanc(t) {
+    if (!leblanc.active) return;
+    leblanc.t += globalDt;
+    const lt = leblanc.t;
+
+    // chain lightning between sun and active clones
+    const liveClones = [];
+    for (const c of leblanc.clones) {
+      const age = lt - c.born;
+      if (age < 0 || age > c.life) continue;
+      const k = age / c.life;
+      const alpha = Math.sin(k * Math.PI);
+      liveClones.push({ c, alpha });
+    }
+
+    // chains
+    for (const { c, alpha } of liveClones) {
+      drawChain(cx, cy, c.x, c.y, alpha * 0.7);
+    }
+    // chains between clones
+    for (let i = 0; i < liveClones.length; i++) {
+      for (let j = i + 1; j < liveClones.length; j++) {
+        const a = liveClones[i], b = liveClones[j];
+        drawChain(a.c.x, a.c.y, b.c.x, b.c.y, Math.min(a.alpha, b.alpha) * 0.35);
+      }
+    }
+
+    // clones (illusory ajotas)
+    for (const { c, alpha } of liveClones) {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      // aura
+      const gr = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, c.size * 2.4);
+      gr.addColorStop(0, 'rgba(255,62,181,0.6)');
+      gr.addColorStop(0.5, 'rgba(255,62,181,0.18)');
+      gr.addColorStop(1, 'rgba(255,62,181,0)');
+      ctx.fillStyle = gr;
+      ctx.beginPath(); ctx.arc(c.x, c.y, c.size * 2.4, 0, Math.PI * 2); ctx.fill();
+      // ring
+      ctx.strokeStyle = 'rgba(255,62,181,0.9)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(c.x, c.y, c.size * 0.7, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,156,220,0.5)';
+      ctx.beginPath(); ctx.arc(c.x, c.y, c.size * 0.45, 0, Math.PI * 2); ctx.stroke();
+      // disc
+      const disc = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, c.size * 0.65);
+      disc.addColorStop(0, 'rgba(255,255,255,0.85)');
+      disc.addColorStop(0.6, 'rgba(255,62,181,0.5)');
+      disc.addColorStop(1, 'rgba(255,62,181,0)');
+      ctx.fillStyle = disc;
+      ctx.beginPath(); ctx.arc(c.x, c.y, c.size * 0.65, 0, Math.PI * 2); ctx.fill();
+      // text
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.font = '600 13px "Space Grotesk", sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('ajota', c.x, c.y + 1);
+      ctx.restore();
+    }
+
+    // runes
+    for (const r of leblanc.runes) {
+      const age = lt - r.born;
+      if (age < 0 || age > r.life) continue;
+      const k = age / r.life;
+      const alpha = Math.sin(k * Math.PI);
+      ctx.save();
+      ctx.translate(r.x, r.y);
+      ctx.rotate(r.rot + k * Math.PI);
+      ctx.globalAlpha = alpha * 0.9;
+      ctx.strokeStyle = '#ff3eb5';
+      ctx.lineWidth = 1;
+      // hex
+      ctx.beginPath();
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * Math.PI * 2;
+        const x = Math.cos(a) * r.size, y = Math.sin(a) * r.size;
+        if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.closePath(); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-r.size * 0.7, 0); ctx.lineTo(r.size * 0.7, 0);
+      ctx.moveTo(0, -r.size * 0.7); ctx.lineTo(0, r.size * 0.7);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // global magenta flash near start
+    if (lt < 0.4) {
+      ctx.fillStyle = `rgba(255,62,181,${(0.4 - lt) * 0.4})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (lt > leblanc.duration - 0.4) {
+      const k = (lt - (leblanc.duration - 0.4)) / 0.4;
+      ctx.fillStyle = `rgba(0,229,255,${k * 0.15})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  function drawChain(x1, y1, x2, y2, alpha) {
+    const segs = 8;
+    const dx = (x2 - x1) / segs, dy = (y2 - y1) / segs;
+    ctx.strokeStyle = `rgba(255,62,181,${alpha})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x1, y1);
+    for (let i = 1; i < segs; i++) {
+      const jx = (Math.random() - 0.5) * 14;
+      const jy = (Math.random() - 0.5) * 14;
+      ctx.lineTo(x1 + dx * i + jx, y1 + dy * i + jy);
+    }
+    ctx.lineTo(x2, y2); ctx.stroke();
+  }
+
+  // ---------- global keys ----------
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      if (termOpen) closeTerminal();
+      else if (preview.classList.contains('show')) closeAll();
+    }
+    if (e.key === 't' && !termOpen && !preview.classList.contains('show') &&
+        !e.metaKey && !e.ctrlKey && !e.altKey &&
+        document.activeElement !== termInput) {
+      e.preventDefault();
+      openTerminal();
+    }
+  });
+
+  // ---------- main loop ----------
+  let lastT = performance.now();
+  let frame = 0, fpsAcc = 0, fpsCount = 0;
+  let globalDt = 0.016;
+
+  function tick(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000);
+    lastT = now;
+    globalDt = dt;
+    frame++;
+
+    // fps
+    fpsAcc += dt; fpsCount++;
+    if (fpsAcc > 0.5) { fpsEl.textContent = Math.round(fpsCount / fpsAcc); fpsAcc = 0; fpsCount = 0; }
+
+    // background — crema con mesh sutil
+    const bgGrad = ctx.createRadialGradient(cx * 0.6, cy * 0.5, 0, cx, cy, Math.max(W, H) * 0.8);
+    bgGrad.addColorStop(0, '#faf7f1');
+    bgGrad.addColorStop(0.5, '#f5f0e8');
+    bgGrad.addColorStop(1, '#ede8de');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    updateParticles(dt);
+    drawParticles();
+
+    drawOrbits();
+
+    updatePlanets(dt);
+    drawSun(now / 1000);
+
+    for (const p of PROJECTS) drawPlanet(p, now / 1000);
+
+    drawLeblanc(now / 1000);
+
+    updateHover();
+
+    // coord readout
+    if (frame % 6 === 0 && mouse.has) {
+      const x = (mouse.x - cx).toFixed(2).padStart(7, '0');
+      const y = (mouse.y - cy).toFixed(2).padStart(7, '0');
+      coordEl.textContent = `[ ${x}, ${y} ]`;
+    }
+
+    requestAnimationFrame(tick);
+  }
+
+  // ---------- init ----------
+  resize();
+  initParticles();
+
+  // boot messages
+  const bootMsgs = ['initializing orbital field…', 'spawning particle dust…', 'linking telemetry…', 'system online.'];
+  let bi = 0;
+  const bootInterval = setInterval(() => {
+    bi++;
+    if (bi < bootMsgs.length) bootMsg.textContent = bootMsgs[bi];
+  }, 320);
+
+  setTimeout(() => {
+    clearInterval(bootInterval);
+    intro.classList.add('gone');
+    setTimeout(() => intro.remove(), 700);
+  }, 1400);
+
+  requestAnimationFrame(tick);
+
+  // helpful: focus terminal input when overlay shown
+  document.addEventListener('click', e => {
+    if (termOpen && termEl.contains(e.target)) termInput.focus();
+  });
+
+})();
+</script>
+</body>
+</html>
