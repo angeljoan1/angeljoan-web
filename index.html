@@ -551,159 +551,33 @@
     ctx.setLineDash([]);
   }
 
-    function drawSun(t) {
-        // Anillo exterior rotatorio suave (estilo plano técnico)
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(t * 0.15);
-        ctx.strokeStyle = 'rgba(193, 127, 74, 0.4)'; // Terracota translúcido
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 6]);
-        ctx.beginPath(); ctx.arc(0, 0, 52, 0, Math.PI * 2); ctx.stroke();
-        ctx.restore();
-
-        // Disco base sólido (Ivory/Crema)
-        ctx.fillStyle = '#faf7f1';
-        ctx.beginPath(); ctx.arc(cx, cy, 38, 0, Math.PI * 2); ctx.fill();
-
-        // Borde perimetral nítido
-        ctx.strokeStyle = '#1a1612'; // Tinta oscura
-        ctx.setLineDash([]);
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-
-        // Tipografía central
-        ctx.fillStyle = '#1a1612';
-        ctx.font = '600 16px "Outfit", sans-serif';
-        ctx.textAlign = 'center'; 
-        ctx.textBaseline = 'middle';
-        ctx.fillText('ajota', cx, cy + 2);
-    }
-
-    // spinning tick marks
+  function drawSun(t) {
+    // Anillo exterior rotatorio suave (estilo plano técnico)
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(t * 0.15);
-    for (let i = 0; i < 24; i++) {
-      const a = (i / 24) * Math.PI * 2;
-      const r1 = 44 + (i % 6 === 0 ? 0 : 3);
-      const r2 = 50 + (i % 6 === 0 ? 4 : 0);
-      const alpha = i % 6 === 0 ? 0.5 : 0.18;
-      ctx.strokeStyle = `rgba(193,127,74,${alpha})`;
-      ctx.lineWidth = i % 6 === 0 ? 1.5 : 0.7;
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
-      ctx.lineTo(Math.cos(a) * r2, Math.sin(a) * r2);
-      ctx.stroke();
-    }
+    ctx.strokeStyle = 'rgba(193, 127, 74, 0.4)'; // Terracota translúcido
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath(); ctx.arc(0, 0, 52, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
 
-    // outer ring
-    ctx.strokeStyle = 'rgba(193,127,74,0.5)';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(cx, cy, 40, 0, Math.PI * 2); ctx.stroke();
+    // Disco base sólido (Ivory/Crema)
+    ctx.fillStyle = '#faf7f1';
+    ctx.beginPath(); ctx.arc(cx, cy, 38, 0, Math.PI * 2); ctx.fill();
 
-    // inner disc — warm ivory
-    const disc = ctx.createRadialGradient(cx - 7, cy - 7, 0, cx, cy, 36);
-    disc.addColorStop(0, 'rgba(255,252,245,1)');
-    disc.addColorStop(0.4, 'rgba(245,230,210,0.98)');
-    disc.addColorStop(0.75, 'rgba(217,164,114,0.7)');
-    disc.addColorStop(1, 'rgba(193,127,74,0.2)');
-    ctx.fillStyle = disc;
-    ctx.beginPath(); ctx.arc(cx, cy, 36, 0, Math.PI * 2); ctx.fill();
+    // Borde perimetral nítido
+    ctx.strokeStyle = '#1a1612'; // Tinta oscura
+    ctx.setLineDash([]);
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
 
-    // subtle inner ring
-    ctx.strokeStyle = 'rgba(193,127,74,0.2)';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(cx, cy, 28 + Math.sin(t * 2) * 1, 0, Math.PI * 2); ctx.stroke();
-
-    // name
-    ctx.save();
-    ctx.fillStyle = '#5a3a1a';
-    ctx.font = '600 15px "Outfit", sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('ajota', cx, cy + 1);
-    ctx.restore();
-  }
-)
-  // planet textures for editorial palette
-  const planetTextures = new Map();
-  function getPlanetTexture(p) {
-    if (planetTextures.has(p.id)) return planetTextures.get(p.id);
-    const sz = p.size * 2 + 4;
-    const oc = document.createElement('canvas');
-    oc.width = sz * 2; oc.height = sz * 2;
-    const octx = oc.getContext('2d');
-    const r = p.size;
-    const cx2 = sz, cy2 = sz;
-
-    if (p.id === 'gastos') {
-      // terracota cálido con grid financiero
-      const g = octx.createRadialGradient(cx2 - r * 0.3, cy2 - r * 0.3, 0, cx2, cy2, r);
-      g.addColorStop(0, '#e8a870'); g.addColorStop(0.5, '#c17f4a'); g.addColorStop(1, '#8f5a2c');
-      octx.fillStyle = g; octx.beginPath(); octx.arc(cx2, cy2, r, 0, Math.PI * 2); octx.fill();
-      octx.strokeStyle = 'rgba(255,240,220,0.20)'; octx.lineWidth = 0.6;
-      for (let i = -r; i < r; i += r * 0.38) {
-        octx.beginPath(); octx.moveTo(cx2 + i, cy2 - r); octx.lineTo(cx2 + i, cy2 + r); octx.stroke();
-        octx.beginPath(); octx.moveTo(cx2 - r, cy2 + i); octx.lineTo(cx2 + r, cy2 + i); octx.stroke();
-      }
-    } else if (p.id === 'github') {
-      // grafito con spikes
-      const g = octx.createRadialGradient(cx2 - r * 0.25, cy2 - r * 0.25, 0, cx2, cy2, r);
-      g.addColorStop(0, '#7a8898'); g.addColorStop(0.6, '#4a5568'); g.addColorStop(1, '#2d3748');
-      octx.fillStyle = g; octx.beginPath(); octx.arc(cx2, cy2, r, 0, Math.PI * 2); octx.fill();
-      octx.strokeStyle = 'rgba(255,255,255,0.25)'; octx.lineWidth = 0.7;
-      for (let a = 0; a < Math.PI; a += Math.PI / 4) {
-        octx.beginPath();
-        octx.moveTo(cx2 + Math.cos(a) * r * 1.4, cy2 + Math.sin(a) * r * 1.4);
-        octx.lineTo(cx2 - Math.cos(a) * r * 1.4, cy2 - Math.sin(a) * r * 1.4);
-        octx.stroke();
-      }
-    } else if (p.id === 'tfg') {
-      // dusty blue con patrón hex
-      const g = octx.createRadialGradient(cx2 - r * 0.3, cy2 - r * 0.4, 0, cx2, cy2, r);
-      g.addColorStop(0, '#adc0d4'); g.addColorStop(0.4, '#7b8fa8'); g.addColorStop(1, '#4a6080');
-      octx.fillStyle = g; octx.beginPath(); octx.arc(cx2, cy2, r, 0, Math.PI * 2); octx.fill();
-      octx.strokeStyle = 'rgba(255,255,255,0.18)'; octx.lineWidth = 0.7;
-      const hr = r * 0.52;
-      octx.beginPath();
-      for (let i = 0; i < 6; i++) {
-        const a = (i / 6) * Math.PI * 2;
-        const nx = cx2 + Math.cos(a) * hr, ny = cy2 + Math.sin(a) * hr;
-        if (i === 0) octx.moveTo(nx, ny); else octx.lineTo(nx, ny);
-      }
-      octx.closePath(); octx.stroke();
-    } else if (p.id === 'gaming') {
-      // sage green brillante
-      const g = octx.createRadialGradient(cx2, cy2, 0, cx2, cy2, r);
-      g.addColorStop(0, '#a8c8a8'); g.addColorStop(0.4, '#7a9e7e'); g.addColorStop(1, '#4a7050');
-      octx.fillStyle = g; octx.beginPath(); octx.arc(cx2, cy2, r, 0, Math.PI * 2); octx.fill();
-    } else if (p.id === 'terminal') {
-      // mauve oscuro con scanlines
-      const g = octx.createRadialGradient(cx2 - r * 0.2, cy2 - r * 0.2, 0, cx2, cy2, r);
-      g.addColorStop(0, '#c89ab8'); g.addColorStop(0.5, '#a07898'); g.addColorStop(1, '#6a4868');
-      octx.fillStyle = g; octx.beginPath(); octx.arc(cx2, cy2, r, 0, Math.PI * 2); octx.fill();
-      octx.strokeStyle = 'rgba(0,0,0,0.15)'; octx.lineWidth = 1;
-      for (let i = -r; i < r; i += 3) {
-        octx.beginPath(); octx.moveTo(cx2 - r, cy2 + i); octx.lineTo(cx2 + r, cy2 + i); octx.stroke();
-      }
-    }
-
-    // dark side shadow
-    const shadow = octx.createRadialGradient(cx2 + r * 0.38, cy2 + r * 0.25, 0, cx2 + r * 0.38, cy2 + r * 0.25, r * 1.1);
-    shadow.addColorStop(0, 'rgba(0,0,0,0.45)');
-    shadow.addColorStop(0.6, 'rgba(0,0,0,0.15)');
-    shadow.addColorStop(1, 'rgba(0,0,0,0)');
-    octx.fillStyle = shadow; octx.beginPath(); octx.arc(cx2, cy2, r, 0, Math.PI * 2); octx.fill();
-
-    // specular highlight
-    const spec = octx.createRadialGradient(cx2 - r * 0.35, cy2 - r * 0.35, 0, cx2 - r * 0.35, cy2 - r * 0.35, r * 0.5);
-    spec.addColorStop(0, 'rgba(255,255,255,0.5)');
-    spec.addColorStop(1, 'rgba(255,255,255,0)');
-    octx.fillStyle = spec; octx.beginPath(); octx.arc(cx2, cy2, r, 0, Math.PI * 2); octx.fill();
-
-    planetTextures.set(p.id, oc);
-    return oc;
+    // Tipografía central
+    ctx.fillStyle = '#1a1612';
+    ctx.font = '600 16px "Outfit", sans-serif';
+    ctx.textAlign = 'center'; 
+    ctx.textBaseline = 'middle';
+    ctx.fillText('ajota', cx, cy + 2);
   }
 
   function drawPlanet(p, t) {
